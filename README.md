@@ -1,2 +1,2 @@
-# bet_bad
+# bet-bad
 predictions
