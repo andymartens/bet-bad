@@ -10,14 +10,12 @@ cd /Users/charlesmartens/Documents/projects/bet_bball
 # technically, need to beat 51.3% to win. though the juice seems a bit erractic, 
 # so probably better to think about it at 51.5%
 
-
-win_pct = .525
-bet_amount = 100
-win_pct*1000*bet_amount*.95 - (1-win_pct)*1000*bet_amount
-
-# when to increase the bet? after how many games and having made how much?
-# is there a point that the win% generally stabilizes for a season? 
-# i.e., after 200 games? and at that point, increase the bet to 1.5% of my new pot.
+# current approach:
+# use adaboost with decision tree regressor in conjuction with regular linear model. 
+# and bet the games they both agree and games > 15. this is giving amazing results (> 56%) 
+# should also try to average the score predictions from each of these models and 
+# use that mean to bet. this will allow to bet on more games, but need to look at
+# the trade-off with the percentage correct.
 
 
 import numpy as np
@@ -58,6 +56,9 @@ from sklearn import linear_model
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import mean_squared_error
+from sklearn import tree
+from sklearn.ensemble import AdaBoostRegressor
+from sklearn.ensemble import GradientBoostingRegressor
 # try tpot
 #from tpot import TPOT
 sns.set_style('white')
@@ -66,6 +67,10 @@ sns.set_style('white')
 df_covers_bball_ref = pd.read_csv('df_covers_bball_ref_2004_to_2015.csv')
 df_covers_bball_ref.pop('Unnamed: 0')
 df_covers_bball_ref['date'] = pd.to_datetime(df_covers_bball_ref['date'])
+
+
+for col in df_covers_bball_ref.columns:
+    print(col)
 
 
 new_names = ['Atlanta Hawks', 'Chicago Bulls', 'Golden State Warriors',
@@ -109,6 +114,17 @@ variables_for_team_metrics = ['team_3PAr', 'team_ASTpct', 'team_BLKpct', 'team_D
 
 
 #------------------------------------------------------------------------------
+# OPTIONAL - add noise to the spread:
+df_covers_bball_ref['random_number'] = np.random.normal(0, .2, len(df_covers_bball_ref))
+df_covers_bball_ref['random_number'].hist(alpha=.7)
+df_covers_bball_ref['spread'] = df_covers_bball_ref.loc[:, 'spread'] + df_covers_bball_ref.loc[:, 'random_number']
+
+# use ending spread or starting spread?
+# ending spread is likely more accurate
+# beginning spread may provide my predicted score with more room to move?
+
+
+
 ###########  create new variables to try out in this section  #############
 
 
@@ -132,7 +148,7 @@ df_covers_bball_ref = loop_through_teams_to_create_rolling_metrics(df_covers_bba
 
 #df_covers_bball_ref['team_count'] = df_covers_bball_ref.groupby('team')['team_3PAr'].transform(lambda x: pd.expanding_count(x))
 #df_covers_bball_ref['team_count'] = df_covers_bball_ref.groupby('team')['team_3PAr'].transform(lambda x: pd.expanding_count(x))
-df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x))
+df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x.shift(1)))
 
 
 ###################################
@@ -217,7 +233,10 @@ df_covers_bball_ref[['team_ASTpct_ewma_15', 'team_ORtg_ewma_15', 'team_AST%_line
 #################################
 
 
-# continue:
+#------------------------------------------------------------------------------
+# compute new variables in this section
+
+
 # compute days rest
 df_covers_bball_ref = df_covers_bball_ref.sort_values('date')
 df_covers_bball_ref['date_prior_game'] = df_covers_bball_ref.groupby('team')['date'].transform(lambda x: x.shift(1))
@@ -259,7 +278,8 @@ df_covers_bball_ref[['date', 'team','team_zone','opponent', 'opponent_zone', 'zo
 #sns.lmplot(x='zone_distance', y='point_difference', data=df_covers_bball_ref[df_covers_bball_ref['venue_x']==0], y_partial='team_ORtg_ewma_15', x_partial='team_ORtg_ewma_15')
 
 
-# compute sort sort of distance from the playoffs
+#-----------------
+# compute  sort of distance from the playoffs
 # need to compute record -- win pct up to the last g first
 # compute sort sort of distance from the playoffs
 # need to compute record -- win pct up to the last g first
@@ -295,6 +315,7 @@ df_covers_bball_ref[['date', 'team', 'team_win', 'team_win_pct']][df_covers_bbal
 #df_2015.tail()
 
 
+# compute a metric that gets at distance from playoffs
 def create_standings_dict_for_date(date, teams, df_2015):
     standings_date_dict = defaultdict(list)
     for team in teams:
@@ -388,6 +409,71 @@ df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'dist
 #df_w_distance_from_playoffs_all_years['date'].dtypes
 
 
+
+#------------------
+# compute if last g has a diff lineup
+# if the lineup is diff than the game before, does that make it harder to guess?
+# need compute whether lineup is diff than prior g here
+df_covers_bball_ref['starters_team_last_g'] = df_covers_bball_ref.groupby('team')['starters_team'].transform(lambda x: x.shift(1))
+df_covers_bball_ref['starters_team_two_g'] = df_covers_bball_ref.groupby('team')['starters_team'].transform(lambda x: x.shift(2))
+
+df_covers_bball_ref['starters_same_as_last_g'] = 0
+df_covers_bball_ref.loc[df_covers_bball_ref['starters_team']==df_covers_bball_ref['starters_team_last_g'], 'starters_same_as_last_g'] = 1
+
+df_covers_bball_ref['starters_same_as_two_g'] = 0
+df_covers_bball_ref.loc[df_covers_bball_ref['starters_team']==df_covers_bball_ref['starters_team_two_g'], 'starters_same_as_two_g'] = 1
+
+#df_covers_bball_ref[['date', 'starters_team', 'starters_team_last_g', 'starters_same_as_last_g']][df_covers_bball_ref['team']=='San Antonio Spurs'].tail(10)
+
+# but doesn't seem to help in model, at last at this point
+
+
+
+#-------------------
+# compute ea team's home court advantage
+
+df_covers_bball_ref['home_point_diff'] = np.nan
+df_covers_bball_ref.loc[df_covers_bball_ref['venue_y']=='home', 'home_point_diff'] = df_covers_bball_ref['point_difference']
+
+df_covers_bball_ref['away_point_diff'] = np.nan
+df_covers_bball_ref.loc[df_covers_bball_ref['venue_y']=='away', 'away_point_diff'] = df_covers_bball_ref['point_difference']
+
+df_covers_bball_ref[['point_difference', 'home_point_diff', 'away_point_diff']]
+df_covers_bball_ref[['home_point_diff', 'away_point_diff']].mean()
+
+df_covers_bball_ref['home_point_diff_ewma'] = df_covers_bball_ref.groupby('team')['home_point_diff'].transform(lambda x: pd.ewma(x.shift(1), span=100))
+df_covers_bball_ref['away_point_diff_ewma'] = df_covers_bball_ref.groupby('team')['away_point_diff'].transform(lambda x: pd.ewma(x.shift(1), span=100))
+
+
+df_covers_bball_ref[['date', 'point_difference', 'home_point_diff_ewma', 'away_point_diff_ewma']][df_covers_bball_ref['team']=='Atlanta Hawks']
+df_covers_bball_ref.loc[:, 'home_court_advantage'] = df_covers_bball_ref.loc[:, 'home_point_diff_ewma'] - df_covers_bball_ref.loc[:, 'away_point_diff_ewma'] 
+
+
+g = df_covers_bball_ref.groupby('team')['home_court_advantage'].mean()
+g.sort()
+g.plot(kind='barh', sort_columns=True)
+plt.xlabel('home court advantage')
+
+# include 'home_court_advantage' as iv. see if helps
+
+
+
+#sns.lmplot(x='home_court_advantage', y='point_difference', data=df_covers_bball_ref)
+
+#sns.barplot(x='starters_same_as_last_g', y='point_difference', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)])
+##sns.barplot(x='starters_same_as_two_g', y='point_difference', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)])
+#
+#
+#
+#sns.barplot(x='starters_same_as_last_g', y='point_difference', hue='starters_same_as_two_g', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)])
+#sns.lmplot(x='starters_same_as_last_g', y='point_difference',
+#           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], hue='starters_same_as_two_g',  
+#           x_partial='team_ORtg_ewma_15', y_partial='team_ORtg_ewma_15')
+#plt.ylim(-1,7)
+
+
+
+
 # Graphs Exploring Distance From Playoffs
 # skip
 #df_covers_bball_ref['distance_from_playoffs'].hist(alpha=.7)
@@ -409,7 +495,6 @@ df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'dist
 # vs. adding the abs val of it -- distance_playoffs_abs -- which makes it better
 
 
-
 # gengerally, think should stay away from the beat spread anys. unreliable and influence by who knows what
 #sns.lmplot(x='distance_from_playoffs', y='beat_spread', 
 #           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], 
@@ -421,27 +506,23 @@ df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'dist
 #            data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)]) 
 #
 #
-#
 #df_covers_bball_ref['distance_playoffs_abs'].hist(alpha=.7)
 #plt.grid(axis='x')
 #
 #
-#
-#sns.lmplot(x='distance_playoffs_abs', y='point_difference', 
-#           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], 
-#           scatter_kws={'alpha':.01}, x_partial='team_win_pct_x', 
-#           y_partial='team_win_pct_x')
-#plt.ylim(0, 7)
-#plt.xlim(0, .6)
-#
+sns.lmplot(x='distance_playoffs_abs', y='point_difference', 
+           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], 
+           scatter_kws={'alpha':.01}, x_partial='team_win_pct_x', 
+           y_partial='team_win_pct_x')
+plt.ylim(0, 7)
+plt.xlim(0, .6)
 #
 #
-#sns.lmplot(x='distance_playoffs_abs', y='point_difference', 
-#           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], 
-#           lowess=True, scatter_kws={'alpha':.01}, x_partial='team_win_pct_x', 
-#           y_partial='team_win_pct_x', x_bins=6)
-##plt.ylim(-20, 20)
-#
+sns.lmplot(x='distance_playoffs_abs', y='point_difference', 
+           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], 
+           lowess=True, scatter_kws={'alpha':.01}, x_partial='team_win_pct_x', 
+           y_partial='team_win_pct_x', x_bins=6)
+plt.ylim(0, 5)
 #
 #
 #model_plot = smf.ols(formula = 'point_difference ~ distance_playoffs_abs + I(distance_playoffs_abs**2) + team_win_pct_x', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)]).fit()
@@ -458,11 +539,9 @@ df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'dist
 #df_covers_bball_ref[['distance_playoffs_abs', 'distance_playoffs_abs_sq']].tail()
 
 
-
 #sns.lmplot(x='distance_playoffs_abs', y='beat_spread', 
 #           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], 
 #           lowess=True, scatter_kws={'alpha':.01}, x_bins=5)
-
 
 
 #sns.lmplot(x='team_win_pct_y', y='beat_spread', 
@@ -471,47 +550,15 @@ df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'dist
 #plt.xlim(.2,.8)
 
 
-
-# next: take abs val of distance from playoffs and make it a var, so gettting the diff between team and oppt
-# then see if it helps predict
-
-
-
-# if the lineup is diff than the game before, does that make it harder to guess?
-# need compute whether lineup is diff than prior g here
-df_covers_bball_ref['starters_team_last_g'] = df_covers_bball_ref.groupby('team')['starters_team'].transform(lambda x: x.shift(1))
-df_covers_bball_ref['starters_team_two_g'] = df_covers_bball_ref.groupby('team')['starters_team'].transform(lambda x: x.shift(2))
-
-df_covers_bball_ref['starters_same_as_last_g'] = 0
-df_covers_bball_ref.loc[df_covers_bball_ref['starters_team']==df_covers_bball_ref['starters_team_last_g'], 'starters_same_as_last_g'] = 1
-
-df_covers_bball_ref['starters_same_as_two_g'] = 0
-df_covers_bball_ref.loc[df_covers_bball_ref['starters_team']==df_covers_bball_ref['starters_team_two_g'], 'starters_same_as_two_g'] = 1
-
-#df_covers_bball_ref[['date', 'starters_team', 'starters_team_last_g', 'starters_same_as_last_g']][df_covers_bball_ref['team']=='San Antonio Spurs'].tail(10)
-
-
-# but doesn't seem to help in model, at last at this point
-
-
-#sns.barplot(x='starters_same_as_last_g', y='point_difference', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)])
-##sns.barplot(x='starters_same_as_two_g', y='point_difference', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)])
-#
-#
-#
-#sns.barplot(x='starters_same_as_last_g', y='point_difference', hue='starters_same_as_two_g', data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)])
-#sns.lmplot(x='starters_same_as_last_g', y='point_difference',
-#           data=df_covers_bball_ref[(df_covers_bball_ref['venue_x']==0)], hue='starters_same_as_two_g',  
-#           x_partial='team_ORtg_ewma_15', y_partial='team_ORtg_ewma_15')
-#plt.ylim(-1,7)
-
 #------------------------------------------------------------------------------
-
+# run this and run again when want to add a new var and re-run below code:
 df_covers_bball_ref_save = df_covers_bball_ref.copy(deep=True)
 df_covers_bball_ref = df_covers_bball_ref_save.copy(deep=True)
-
 #------------------------------------------------------------------------------
-# continue
+
+
+#--------------
+# add or subtract vars from two lists below. should only have to do that once, here.
 
 # include all vars here that i'll want to use:
 variables_for_df = ['date', 'team', 'opponent', 'venue', 'lineup_count', 
@@ -534,10 +581,10 @@ variables_for_df = ['date', 'team', 'opponent', 'venue', 'lineup_count',
        'opponent_eFGpct_ewma_15', 'opponent_fg3_pct_ewma_15',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15',
        'opponent_pf_ewma_15', 'days_rest', 'zone_distance', 'distance_playoffs_abs', 
-       'starters_same_as_last_g']
+       'starters_same_as_last_g', 'home_court_advantage']
 
 # include all vars i want to precict with
-iv_variables = ['lineup_count', 'spread', 'totals',
+iv_variables = ['spread', 'totals', 'lineup_count', 
        'spread_ewma_15', 'current_spread_vs_spread_ewma',
        'beat_spread_ewma_15', 'beat_spread_std_ewma_15',
        'beat_spread_last_g', 'team_3PAr_ewma_15', 'team_ASTpct_ewma_15', 
@@ -552,7 +599,20 @@ iv_variables = ['lineup_count', 'spread', 'totals',
        'opponent_STLpct_ewma_15', 'opponent_TOVpct_ewma_15', 'opponent_TRBpct_ewma_15', 
        'opponent_TSpct_ewma_15', 'opponent_eFGpct_ewma_15', 'opponent_fg3_pct_ewma_15',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15', 'opponent_pf_ewma_15', 
-       'days_rest', 'zone_distance', 'distance_playoffs_abs']  #, 'starters_same_as_last_g']
+       'days_rest', 'zone_distance', 'distance_playoffs_abs', 'game', 'home_court_advantage']  #, 'starters_same_as_last_g']
+
+for var in iv_variables:
+    print(var)
+
+# select the dv to predict:
+#dv_var = 'ats_win'  
+#dv_var = 'win'
+#dv_var = 'spread'
+dv_var = 'point_difference'
+
+iv_and_dv_vars = iv_variables + [dv_var] + ['team', 'opponent', 'date']
+
+#--------------
 
 df_covers_bball_ref.rename(columns={'venue_x':'venue'}, inplace=True)
 df_covers_bball_ref = df_covers_bball_ref[variables_for_df]
@@ -571,7 +631,6 @@ def create_switched_df(df_all_teams):
 df_covers_bball_ref_switched = create_switched_df(df_covers_bball_ref)
 
 
-
 def preface_oppt_stats_in_switched_df(df_all_teams_swtiched, variables_for_df):
     # preface all these stats -- they belong to the team in this df but to
     # the opponent in the orig df -- with an x_. then when merge back onto original df
@@ -587,6 +646,7 @@ def preface_oppt_stats_in_switched_df(df_all_teams_swtiched, variables_for_df):
            
 df_covers_bball_ref_switched = preface_oppt_stats_in_switched_df(df_covers_bball_ref_switched, variables_for_df)
 df_covers_bball_ref_switched.columns
+
 
 def merge_regular_df_w_switched_df(df_all_teams, df_all_teams_swtiched):    
     df_all_teams_w_ivs = df_all_teams.merge(df_all_teams_swtiched, on=['date', 'team', 'opponent'], how='left')
@@ -620,15 +680,17 @@ def create_basic_variables(df_all_teams_w_ivs):
 df_covers_bball_ref = create_basic_variables(df_covers_bball_ref)
 
 
-def create_iv_list(iv_variables):
-    spread_and_totals_list = ['spread', 'totals', 'game']
-    iv_variables.remove(spread_and_totals_list[0])
-    iv_variables.remove(spread_and_totals_list[1])
+def create_iv_list(iv_variables, variables_without_difference_score_list):
+    """Put all variables that don't want to compute a difference score on."""
+    spread_and_totals_list = variables_without_difference_score_list
+    for i in range(len(spread_and_totals_list)):
+        print(i)
+        iv_variables.remove(spread_and_totals_list[i])
     iv_variables = ['difference_'+iv_var for iv_var in iv_variables]
     iv_variables = iv_variables + spread_and_totals_list
     return iv_variables
 
-iv_variables = create_iv_list(iv_variables)
+iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'home_court_advantage'])
 
 
 def create_home_df(df_covers_bball_ref):
@@ -640,41 +702,98 @@ def create_home_df(df_covers_bball_ref):
 df_covers_bball_ref_home = create_home_df(df_covers_bball_ref)
 
 
+
+
+#------------------------------------------------------------------------------
+# compare spread with diff between past spread histories
+#df_covers_bball_ref_home.loc[:, 'spread_vs_past_spread_histories'] = df_covers_bball_ref_home.loc[:, 'spread'] - df_covers_bball_ref_home.loc[:, 'difference_spread_ewma_15']
+#df_covers_bball_ref_home[['spread_vs_past_spread_histories', 'difference_current_spread_vs_spread_ewma']].corr()
+## interesting -- these 2 aren't the same (corr ~ .6)
+#iv_variables = iv_variables + ['spread_vs_past_spread_histories']
+#variables_for_df = variables_for_df + ['spread_vs_past_spread_histories']
+# crazy -- this var doesn't predict at all when difference_current_spread_vs_spread_ewma is in the model
+# so what's special about difference_current_spread_vs_spread_ewma???
+
+#-------------------
+
+# skip for now ------
 df_covers_bball_ref_home.loc[:, 'starters_the_same'] = df_covers_bball_ref_home.loc[:, 'starters_same_as_last_g'] + df_covers_bball_ref_home.loc[:, 'x_starters_same_as_last_g']
 iv_variables = iv_variables + ['starters_the_same']
 variables_for_df = variables_for_df + ['starters_the_same']
+# --------------------
+#df_covers_bball_ref_home['home_court_advantage_2'] = df_covers_bball_ref_home[['home_court_advantage', 'x_home_court_advantage']].sum(axis=1)
+#iv_variables = iv_variables + ['home_court_advantage_2']
+#variables_for_df = variables_for_df + ['home_court_advantage_2']
 
-
+#----------------
+# seemed to help, so use. and explore more
 # add interactions to the var list
 df_covers_bball_ref_home['game_x_playoff_distance'] = df_covers_bball_ref_home['game'] * df_covers_bball_ref_home['difference_distance_playoffs_abs']
 iv_variables = iv_variables + ['game_x_playoff_distance']
 variables_for_df = variables_for_df + ['game_x_playoff_distance']
+#----------------
+# skip for now
+# add interactions with game. what might interact such that can predict early games better?
+df_covers_bball_ref_home['game_x_spread'] = df_covers_bball_ref_home['game'] * df_covers_bball_ref_home['spread']
+iv_variables = iv_variables + ['game_x_spread']
+variables_for_df = variables_for_df + ['game_x_spread']
+
+df_covers_bball_ref_home['game_x_days_rest'] = df_covers_bball_ref_home['game'] * df_covers_bball_ref_home['difference_days_rest']
+iv_variables = iv_variables + ['game_x_days_rest']
+variables_for_df = variables_for_df + ['game_x_days_rest']
+
+df_covers_bball_ref_home['game_x_team_ORtg_ewma_15'] = df_covers_bball_ref_home['game'] * df_covers_bball_ref_home['difference_team_ORtg_ewma_15']
+iv_variables = iv_variables + ['game_x_team_ORtg_ewma_15']
+variables_for_df = variables_for_df + ['game_x_team_ORtg_ewma_15']
+
+df_covers_bball_ref_home['game_x_opponent_ORtg_ewma_15'] = df_covers_bball_ref_home['game'] * df_covers_bball_ref_home['difference_opponent_ORtg_ewma_15']
+iv_variables = iv_variables + ['game_x_opponent_ORtg_ewma_15']
+variables_for_df = variables_for_df + ['game_x_opponent_ORtg_ewma_15']
+
+#----------------
+# sigmoid transformation of vars
+for col in iv_variables:
+    print(col)
 
 
+sns.lmplot(x='difference_team_ASTpct_ewma_15', y='point_difference', data=df_covers_bball_ref_home, scatter_kws={'alpha':.01}, lowess=True)
+x = sns.lmplot(x='difference_team_ASTpct_ewma_15', y='point_difference', data=df_covers_bball_ref_home, scatter_kws={'alpha':.01}, order=3)
+sns.lmplot(x='difference_opponent_eFGpct_ewma_15', y='point_difference', data=df_covers_bball_ref_home, scatter_kws={'alpha':.05}, lowess=True)
+sns.lmplot(x='difference_opponent_eFGpct_ewma_15', y='point_difference', data=df_covers_bball_ref_home, scatter_kws={'alpha':.05}, order=3)
+# this kind of suggests that if anything, at the extremes, the pt diff is more extreme, not less so
+sns.lmplot(x='difference_opponent_eFGpct_ewma_15', y='point_difference', data=df_covers_bball_ref_home, scatter_kws={'alpha':.05}, order=3)
+sns.lmplot(x='spread', y='point_difference', data=df_covers_bball_ref_home, scatter_kws={'alpha':.05}, order=3)
 
+#----------------
+# skip for now
+# add cubic -- yea think i should really try this. skip sigmoid for now. this cubic may be pretty good at modeling
+df_covers_bball_ref_home['difference_team_ASTpct_ewma_15_squared'] = df_covers_bball_ref_home[['difference_team_ASTpct_ewma_15']]**2
+iv_variables = iv_variables + ['game_x_playoff_distance']
+variables_for_df = variables_for_df + ['game_x_playoff_distance']
 
-# CUT:
-#all_iv_vars = ['difference_spread_expanding_mean', 'difference_lineup_count', 
-#       'difference_beat_spread_rolling_mean_11', 'difference_beat_spread_rolling_std_11', 
-#       'difference_beat_spread_last_g', 'difference_team_3PAr_ewma_15',
-#       'difference_team_AST%_ewma_15', 'difference_team_BLK%_ewma_15', 'difference_team_DRB%_ewma_15',
-#       'difference_team_DRtg_ewma_15', 'difference_team_FTr_ewma_15', 'difference_team_ORB%_ewma_15',
-#       'difference_team_ORtg_ewma_15', 'difference_team_STL%_ewma_15', 'difference_team_TOV%_ewma_15',
-#       'difference_team_TRB%_ewma_15', 'difference_team_TS%_ewma_15', 'difference_team_eFG%_ewma_15',
-#       'difference_team_fg3_pct_ewma_15', 'difference_team_fg_pct_ewma_15', 'difference_team_ft_pct_ewma_15',
-#       'difference_team_pf_ewma_15', 'difference_opponent_3PAr_ewma_15', 'difference_opponent_AST%_ewma_15',
-#       'difference_opponent_BLK%_ewma_15', 'difference_opponent_DRB%_ewma_15',
-#       'difference_opponent_DRtg_ewma_15', 'difference_opponent_FTr_ewma_15',
-#       'difference_opponent_ORB%_ewma_15', 'difference_opponent_ORtg_ewma_15',
-#       'difference_opponent_STL%_ewma_15', 'difference_opponent_TOV%_ewma_15',
-#       'difference_opponent_TRB%_ewma_15', 'difference_opponent_TS%_ewma_15',
-#       'difference_opponent_eFG%_ewma_15', 'difference_opponent_fg3_pct_ewma_15',
-#       'difference_opponent_fg_pct_ewma_15', 'difference_opponent_ft_pct_ewma_15',
-#       'difference_opponent_pf_ewma_15', 'spread', 'totals', 'difference_days_rest', 'zone_distance', 
-#       'difference_distance_playoffs_abs', 'difference_starters_same_as_last_g']  #* using
+df_covers_bball_ref_home[['difference_team_ASTpct_ewma_15', 'difference_team_ASTpct_ewma_15_squared']].tail()
+
+#x = np.arange(-100,100)
+#x_sq = x**2
+#x_cu = x**3
 #
-#len(all_iv_vars)
-len(iv_variables)
+#plt.scatter(x,x_sq)
+#plt.scatter(x,x_cu)
+#
+#y = -5.5*x + 2.25*x_sq - 7.85*x_cu
+#plt.plot(y)
+#
+#y = .5*x + .85*x_cu
+#plt.plot(y)
+#
+#x_sig = x/(np.square(1+x**2))
+#plt.plot(x_sig)
+#
+#y = .5*(x/(np.square(1+x**2)))
+#plt.plot(y)
+#
+#plt.scatter(x_sig,x)
+#----------------
 
 
 # skip:
@@ -695,49 +814,21 @@ len(iv_variables)
 # but, the overall means look a bit more consistent. only 2010 is crappy. so don't necessarily give up on this
 
 
-# select the dv to predict:
-#dv_var = 'ats_win'  
-#dv_var = 'win'
-#dv_var = 'spread'
-dv_var = 'point_difference'
-
-iv_and_dv_vars = iv_variables + [dv_var] + ['team', 'opponent', 'date']
-df_covers_bball_ref_home[iv_and_dv_vars].head(10)
-print(len(df_covers_bball_ref_home))
+# check on missing values:
+#for var in iv_variables:
+#    print(var)
+#    print(len(df_covers_bball_ref_home[df_covers_bball_ref_home[var].isnull()]))
+#    print()
 
 
-for var in iv_variables:
-    print(var)
-    print(len(df_covers_bball_ref_home[df_covers_bball_ref_home[var].isnull()]))
-    print()
-    
-# missing values:
-    
-#difference_spread_expanding_mean
-#1894
-#
-#difference_current_spread_vs_spread_expanding
-#1894
-#
-#difference_beat_spread_rolling_mean_11
-#957
-#
-#difference_beat_spread_rolling_std_11
-#957
-#
-#difference_distance_playoffs_abs
-#842
-#
-#difference_beat_spread_last_g
-#213
-
-
+# drop nans:
+print('\n number of games with nans:', len(df_covers_bball_ref_home))
 df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.dropna()
-print(len(df_covers_bball_ref__dropna_home))
-
-
+print('\n number of games without nans:', (len(df_covers_bball_ref__dropna_home)))
+ 
 
 ########## scale vars -- skip ##########
+# skp unless using regularization
 def scale_variables(df, variables):
     #df[all_iv_vars] = scale(df[all_iv_vars])
     for var in variables:
@@ -750,31 +841,29 @@ df_covers_bball_ref__dropna_home = scale_variables(df_covers_bball_ref__dropna_h
 
 # ## examine accuracy of spread ea year
 
+#df_covers_bball_ref__dropna_home.loc[:,'spread_accuracy'] = np.abs(df_covers_bball_ref__dropna_home.loc[:,'point_difference'] + df_covers_bball_ref__dropna_home.loc[:,'spread'])
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2004].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2005].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2006].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2007].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2008].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2009].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2010].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2011].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2012].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2013].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2014].mean())
+#print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2015].mean())
+##df_covers_bball_ref__dropna_home[['spread', 'point_difference', 'spread_accuracy']].head()
+#
+#df_covers_bball_ref__dropna_home[['point_difference', 'spread', 'spread_accuracy']].head(10)
 
-df_covers_bball_ref__dropna_home.loc[:,'spread_accuracy'] = np.abs(df_covers_bball_ref__dropna_home.loc[:,'point_difference'] + df_covers_bball_ref__dropna_home.loc[:,'spread'])
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2004].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2005].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2006].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2007].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2008].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2009].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2010].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2011].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2012].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2013].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2014].mean())
-print(df_covers_bball_ref__dropna_home[['spread_accuracy']][df_covers_bball_ref__dropna_home['season_start'] == 2015].mean())
-#df_covers_bball_ref__dropna_home[['spread', 'point_difference', 'spread_accuracy']].head()
-
-df_covers_bball_ref__dropna_home[['point_difference', 'spread', 'spread_accuracy']].head(10)
-
-for year in [2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015]:
-    model_plot = smf.ols(formula = 'point_difference ~ spread', data=df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['season_start'] == year]).fit() 
-    print(np.round(model_plot.rsquared, 3), np.round(model_plot.fvalue, 3))
+#for year in [2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015]:
+#    model_plot = smf.ols(formula = 'point_difference ~ spread', data=df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['season_start'] == year]).fit() 
+#    print(np.round(model_plot.rsquared, 3), np.round(model_plot.fvalue, 3))
 # spread seems to be getting more consistently good
 # i looked at 2007, really accuracy spread year early on. if i bet on that year after training on previous 3 seasons
 # i do terrible that. year. suggests that the more accurate the spread, the worse this model will do?
-
 
 
 #df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] != 2015)]
@@ -784,13 +873,14 @@ def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, test_year):
     #                                                                  (df_covers_bball_ref__dropna_home['season_start'] > test_year-7)]
     df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < test_year) &
                                                                       (df_covers_bball_ref__dropna_home['season_start'] > 2004)]
+    # ADDED THIS TO TRAINING ON ONLY GAMES AFTER # 15. SEE IF HELPS
+    #df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
     print ('training n:', len(df_covers_bball_ref_home_train))
     df_covers_bball_ref_home_test = df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['season_start'] == test_year]
     print ('test n:', len(df_covers_bball_ref_home_test))
     return df_covers_bball_ref_home_train, df_covers_bball_ref_home_test
 
 #df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, 2010)
-
 
 
 def create_df_weight_recent_seasons_more(df_covers_bball_ref_home_train):
@@ -803,8 +893,6 @@ def create_df_weight_recent_seasons_more(df_covers_bball_ref_home_train):
             df_season_multiple = pd.concat([df_season_multiple,df_season], ignore_index=True)
         df_training_weighted = pd.concat([df_training_weighted, df_season_multiple], ignore_index=True)
     return df_training_weighted
-
-
 
 #df_covers_bball_ref_home_train_weighted = create_df_weight_recent_seasons_more(df_covers_bball_ref_home_train)
 
@@ -830,8 +918,6 @@ def mse_in_training_set(df_covers_bball_ref_home_train, algorithm):
 
 
 # ##Translate point diff model into ats in test season(s)
-
-
 # create correct metric:
 def create_correct_metric(df):
     df['correct'] = np.nan
@@ -846,7 +932,6 @@ def create_correct_metric(df):
     # create var to say how much my prediction deviates from actual spread:
     df['predicted_spread_deviation'] = np.abs(df['spread'] + df['point_diff_predicted'])
     return df
-
 
 
 # fit model on data up through 2014 season
@@ -878,23 +963,17 @@ def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_cov
 #plt.xlim(0,4)
 
 
-# ##Compute multiple seasons training on prior seasons
-
-
-from sklearn import tree
-from sklearn.ensemble import AdaBoostRegressor
-from sklearn.ensemble import GradientBoostingRegressor
-
-
 #import inspect
 #from sklearn.utils.testing import all_estimators
 #for name, clf in all_estimators(type_filter='regressor'):
 #    if 'sample_weight' in inspect.getargspec(clf().fit)[0]:
 #       print(name)
 
-# IS THERE ANY REASON THAT THIS SHOULD PRODUCE HIGHER ACCURACY WHEN JUST DOING
-# 2015 VS. SETTING THE SEASONS VARIABLE TO A LIST OF YEARS?
 
+# ----------------------
+# add remove variables:
+#iv_variables.remove('spread')
+#iv_variables = iv_variables + ['spread']
 
 # general approach idea: run regular regression and get predictions and run
 # 4-5 adaboost regressions and avg those, and then avg the regular regression
@@ -903,13 +982,15 @@ from sklearn.ensemble import GradientBoostingRegressor
 # games that both regular and boosted agree? that should weed out a few games and
 # hopefully improve odds a little.
 
-
-#seasons = [2010, 2011, 2012, 2013, 2014, 2015]
-seasons = [2010, 2012, 2013, 2014, 2015]  # omit 2011
+# compute cross validated accuracy
+seasons = [2010, 2011, 2012, 2013, 2014, 2015]
+#seasons = [2010, 2012, 2013, 2014, 2015]  # omit 2011
 #seasons = [2015]
-#seasons = [2014]
+seasons = [2013, 2014, 2015]
+seasons = [2010, 2011, 2012, 2013]
 
-#model = linear_model.Ridge(alpha=2)
+
+#model = linear_model.Ridge(alpha=10)
 model = linear_model.LinearRegression()
 #model = KNeighborsRegressor(n_neighbors=800, weights='distance')
 #model = RandomForestRegressor(n_estimators=750)  # , min_samples_leaf = 10, min_samples_split = 50)
@@ -919,7 +1000,9 @@ model = linear_model.LinearRegression()
 # holy shit, this adaboost ups the 2015 accuracy to 55%. but took about 1/2 hr to run w 200 estimators
 # I think shrinking the learning rate below 1 helps. need bigger n_estimators, though?
 # using loss='square' may also be better than 'linear?'
-#model = AdaBoostRegressor(tree.DecisionTreeRegressor(), n_estimators=200, learning_rate=.01, loss='exponential')  # this decision tree regressor is the default
+
+# used this below in conjuction with regular linear model. and bet the games they both agree. 
+model = AdaBoostRegressor(tree.DecisionTreeRegressor(), n_estimators=400, learning_rate=.01, loss='exponential')  # this decision tree regressor is the default
 # this is predicting well for 2015 and maybe 2014. but not predicting for all. why?
 
 # but the i did it again w 200 estimators and only got 50%?!
@@ -927,8 +1010,8 @@ model = linear_model.LinearRegression()
 #model = AdaBoostRegressor(KNeighborsRegressor(n_neighbors=500), n_estimators=100)  # this decision tree regressor is the default
 # yeah -- this boosting model below is giving gains on the regular regression
 
-#THIS IS THE ONE:
-model = AdaBoostRegressor(linear_model.LinearRegression(), n_estimators=200, learning_rate=.001, loss='exponential')  # this decision tree regressor is the default
+# this sometimes worked wll
+#model = AdaBoostRegressor(linear_model.LinearRegression(), n_estimators=800, learning_rate=.001, loss='exponential')  # this decision tree regressor is the default
 
 #model = AdaBoostRegressor(linear_model.Ridge(alpha=.01), n_estimators=100, learning_rate=.01, loss='exponential')  # this decision tree regressor is the default
 #model = AdaBoostRegressor(linear_model.KernelRidge(alpha=.01), n_estimators=100, learning_rate=.01, loss='exponential')  # this decision tree regressor is the default
@@ -984,15 +1067,7 @@ plt.ylabel('percent correct')
 plt.axhline(51.5, linestyle='--', color='grey', linewidth=1, alpha=.5)
 sns.despine()
 
-
-for season in range(len(seasons)):
-    plt.plot([mean_sq_error_list[season][1], mean_sq_error_list[season][1]], label=str(seasons[season]));
-plt.ylim(8.5, 9.5)
-#plt.grid(axis='y', linestyle='--', alpha=.5)
-plt.xticks([])
-plt.legend()
-plt.ylabel('error')
-sns.despine()
+[print(str(year)+':', accuracy) for year, accuracy in accuracy_list]
 
 # nice that this graph is showing a lot of stability -- when i'm taking just the 6 years prior to the test year
 # but if i take all years back to 2005 before the test year, more spread out so that the more recent the year 
@@ -1004,24 +1079,66 @@ sns.despine()
 # depending on how recent the year. saftest bet now seems not to weight them.
 
 
-accuracy_list
+# compute mean sq error for each season:
+#for season in range(len(seasons)):
+#    plt.plot([mean_sq_error_list[season][1], mean_sq_error_list[season][1]], label=str(seasons[season]));
+#plt.ylim(8.5, 9.5)
+##plt.grid(axis='y', linestyle='--', alpha=.5)
+#plt.xticks([])
+#plt.legend()
+#plt.ylabel('error')
+#sns.despine()
 
 
+
+
+# CAN I MAKE THICKNESS OF LINE CORRESPOND TO SAMPLE SIZE AT THAT POINT?
+# THAT WOULD BE A REALLY HELPFUL THING GENERALLY
 for season in seasons:
     df_test_seasons['predicted_spread_deviation'][df_test_seasons['season_start']==season].hist(alpha=.1, color='green')
+    plt.xlim(0,4)
 
 sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons, hue='season_start', lowess=True, line_kws={'alpha':.6})
 plt.ylim(.3, .7)
 plt.xlim(0,4)
-plt.grid(axis='y', linestyle='--', alpha=.5)
-plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.grid(axis='y', linestyle='--', alpha=.15)
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.75)
 
 
-sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+bin_number = 20
+n, bins, patches = plt.hist(df_test_seasons['predicted_spread_deviation'], bin_number, color='white')
+#plt.bar(bins[:-1], n, width=bins[1]-bins[0], alpha=.1, color='white')
+
+sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.5, 'color':'blue'})
 plt.ylim(.4, .6)
 plt.xlim(0,4)
 #plt.grid(axis='y', linestyle='--', alpha=.75)
+max_n = n.max()
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.xlabel('degree the predicted point difference \n deviated from the spread' )
+
+for i in range(bin_number):
+    a = 1 - n[i]/max_n
+    print(a)
+    plt.bar(bins[:-1][i], n[i], width=bins[1]-bins[0], alpha=a, color='b', linewidth=0)
+
+
+# i'm getting there. can i figure out how to plot a white hist so that with alpha=1
+# it will obscure whatever is behind it?
+
+
+
+
+plt.bar([1, 2, 3, 4], [55, 66, 77, 88])
+plt.bar([1, 2, 3, 4], [44, 33, 22, 11], color='w')
+
+plt.bar([1, 2, 3, 4], [44, 33, 22, 11], color='k')
+ax = sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons, line_kws={'alpha':.2, 'color':'blue'})
+plt.ylim(.4, .6)
+plt.xlim(0,5)
+ax = plt.bar([1, 2, 3, 4], [44, 33, 22, 11], color='w')
+ax = plt.bar([1, 2, 3, 4], [44, 33, 22, 11], color='w')
+
 
 
 # this is pretty clearly showing that i shouldn't bet anything early than game 20
@@ -1036,24 +1153,131 @@ sns.lmplot(x='predicted_spread_deviation', y='correct', hue='game_binned', data=
 plt.ylim(.35,.65)
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
 
+df_test_seasons.spread.describe() #will give 25, 50, and 75 percentiles. Use those numbers to bin
+bins = np.array([-8, -4, 2.5]) #these three numbers are the 25 th , 50 th , and 75 th percentiles.
+binned = np.digitize(df_test_seasons.spread, bins)
+df_test_seasons['spread_binned'] = binned #create new variable that’s comprised of the bins
+sns.lmplot(x='predicted_spread_deviation', y='correct', hue='spread_binned', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.ylim(.35,.65)
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+
+df_test_seasons['spread_favored'] = np.nan
+df_test_seasons.loc[df_test_seasons['spread'] < 0, 'spread_favored'] = 1
+df_test_seasons.loc[df_test_seasons['spread'] >= 0, 'spread_favored'] = 0
+
 results = smf.logit(formula = 'correct ~ predicted_spread_deviation + I(predicted_spread_deviation**2) + game_binned', data=df_test_seasons).fit()
 print(results.summary())  # p = .49
 
 
 # this suggests i skip betting early in season. it's harder to beat chance here
 sns.lmplot(x='game', y='absolute_error', data=df_test_seasons, lowess=True, scatter_kws={'alpha':.06})
-plt.ylim(5,10)
+plt.ylim(7,9)
 results = smf.ols(formula = 'absolute_error ~ game', data=df_test_seasons).fit()
 print(results.summary())  # p = .49
 
+#for season in [2012,2013,2014,2015]:
+#    sns.lmplot(x='game', y='correct', data=df_test_seasons[df_test_seasons['season_start']==season], lowess=True, line_kws={'alpha':.6})
+#    plt.title(str(season), fontsize=15)
+#    plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+#results = smf.logit(formula = 'correct ~ game', data=df_test_seasons).fit()
+#print(results.summary())  # p = .046
+
+sns.lmplot(x='game', y='correct', data=df_test_seasons, hue='season_start', lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.4,.65)
+
 sns.lmplot(x='game', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
-for season in [2012,2013,2014,2015]:
-    sns.lmplot(x='game', y='correct', data=df_test_seasons[df_test_seasons['season_start']==season], lowess=True, line_kws={'alpha':.6})
-    plt.title(str(season), fontsize=15)
-    plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
-results = smf.logit(formula = 'correct ~ game', data=df_test_seasons).fit()
-print(results.summary())  # p = .046
+plt.ylim(.4,.65)
+
+
+df_test_seasons['spread'].hist(alpha=.5)
+plt.grid()
+sns.despine()
+
+# no real pattern
+# except that maybe games in the middle are easier to model
+sns.lmplot(x='spread', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.4,.6)
+
+# what does this look like if omit last two seasons? same pattern?
+sns.lmplot(x='spread', y='correct', data=df_test_seasons[df_test_seasons['season_start']< 2014], lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.4,.6)
+
+
+# knd of suggesting that i guess correctly when the spread is in the middle,
+# between say, -15 and 15. though only for games in the last 3/4 of the season
+# don't bet at all on games in first 1/4 of season or on those with spreads
+# on the fringes. if i'm not betting on games with spreads on tehe fringes
+# or on games in first 1/4 of season, then i probably shoudln't train model on 
+# these gaes either??? 
+sns.lmplot(x='spread', y='correct', hue='game_binned',  data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.35,.65)
+
+sns.lmplot(x='lineup_count', y='correct', hue='game_binned',  data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.35,.65)
+
+df_test_seasons['spread_ewma_15'].hist(alpha=.7)
+plt.grid()
+sns.lmplot(x='difference_spread_ewma_15', y='correct', hue='game_binned',  data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.35,.65)
+results = smf.logit(formula = 'correct ~ difference_spread_ewma_15', data=df_test_seasons).fit()
+print(results.summary())  # p = .13
+
+# pretty much saying that i'm better at predicting this variable around the middle. 
+# fits theme of a lot of these vars
+df_test_seasons['difference_beat_spread_ewma_15'].hist(alpha=.7)
+plt.grid()
+sns.despine()
+sns.lmplot(x='difference_beat_spread_ewma_15', y='correct',  data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.35,.65)
+
+
+# think this is saying that the low std devs are the games i can predic tbetter
+df_test_seasons['beat_spread_std_ewma_15'].hist(alpha=.7)
+plt.grid()
+sns.lmplot(x='beat_spread_std_ewma_15', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(.35,.65)
+# looks like early in season, high std predict worse performance
+# but in later 3/4 of season it predict better behavior. why? based on more data?
+# when based on a lot of data, it shows a teams potential. when based on little data
+# it shows ...?
+sns.lmplot(x='beat_spread_std_ewma_15', y='point_difference', hue='game_binned',  data=df_test_seasons, scatter_kws={'alpha':.1})
+#plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
+plt.ylim(-10,10)
+results = smf.ols(formula = 'point_difference ~ beat_spread_std_ewma_15 * game', data=df_test_seasons).fit()
+print(results.summary())  # p = .253
+
+# when supposed to win (neg spread), high std predict performaing better
+# when supposed to lose, high std predicts performing worse
+sns.lmplot(x='beat_spread_std_ewma_15', y='correct', hue='spread_favored',  data=df_test_seasons, lowess=True, scatter_kws={'alpha':.3})
+plt.ylim(-10,15)
+results = smf.logit(formula = 'correct ~ beat_spread_std_ewma_15', data=df_test_seasons).fit()
+print(results.summary())  # p = .815
+
+
+# this variable is powerful predictor of score. what's it saying?
+sns.lmplot(x='difference_current_spread_vs_spread_ewma', y='point_difference', data=df_test_seasons, lowess=True, scatter_kws={'alpha':.05}, line_kws={'alpha':.8})
+#sns.lmplot(x='difference_current_spread_vs_spread_ewma', y='point_difference', data=df_test_seasons, lowess=True, scatter_kws={'alpha':.05}, line_kws={'alpha':.8}, y_partial='spread', x_partial='spread')
+#plt.ylim(-5,5)
+
+# formula:
+# df_covers_bball_ref['current_spread_vs_spread_ewma'] = df_covers_bball_ref.loc[:, 'spread'] - df_covers_bball_ref.loc[:, 'spread_ewma_15']
+
+# low numbers = the vegas prediction says they'll win by more than their recent spread history
+# hmmm, wait shouldn't i subtract the away team spread_ewma_15 from the home team's, and
+# then compare that to the current spread???? I think so. do that.
+
+
+
+
 
 # starters_the_same doesn't seem to say anything consistent
 df_test_seasons.loc[:, 'starters_the_same'] = df_test_seasons[['starters_same_as_last_g', 'x_starters_same_as_last_g']].sum(axis=1)
@@ -1073,7 +1297,7 @@ print(results.summary())
 # suggests really laying off the games at the beginning of the season IF
 # both (or even one) of the teams have a diff lineup than the game before
 sns.lmplot(x='game', y='correct', hue='starters_the_same', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
-plt.title('starters the same: ' + str(number) + ' year: ' + str(season))
+#plt.title('starters the same: ' + str(number) + ' year: ' + str(season))
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
 plt.ylim(.35, .65)
 
@@ -1112,6 +1336,10 @@ print(results.summary())
 
 
 
+#------------------------------------------------------------------------------
+# look at winning % with diff selection criteria
+print('betting on all games:')
+[print(str(year)+':', accuracy) for year, accuracy in accuracy_list]
 
 #df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .5) & (df_test_seasons['predicted_spread_deviation'] < 3)]
 df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .25)]
@@ -1119,6 +1347,52 @@ df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
 print (df_truncated.groupby('season_start')['correct'].count())
+
+df_truncated = df_test_seasons[(df_test_seasons['game'] > 15)]
+df_truncated['season_start'].unique()
+print (df_truncated.groupby('season_start')['correct'].mean())
+print()
+print (df_truncated.groupby('season_start')['correct'].count())
+
+df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .25) & (df_test_seasons['game'] > 15)]
+df_truncated['season_start'].unique()
+print (df_truncated.groupby('season_start')['correct'].mean())
+print()
+print (df_truncated.groupby('season_start')['correct'].count())
+
+#df_truncated = df_test_seasons[(df_test_seasons['spread'] > -11) & (df_test_seasons['spread'] < 7)]
+#df_truncated['season_start'].unique()
+#print (df_truncated.groupby('season_start')['correct'].mean())
+#print()
+#print (df_truncated.groupby('season_start')['correct'].count())
+
+
+df_test_seasons_adaboost = df_test_seasons.copy(deep=True)
+df_test_seasons_adaboost['correct_adaboost'] = df_test_seasons_adaboost['correct']
+len(df_test_seasons_adaboost)
+len(df_test_seasons)
+df_test_seasons['correct_adaboost'] = df_test_seasons_adaboost['correct_adaboost']
+
+df_test_seasons[['correct', 'correct_adaboost']].tail(20)
+df_test_seasons[['correct', 'correct_adaboost']].corr()
+len(df_test_seasons[df_test_seasons['correct']!=df_test_seasons['correct_adaboost']])
+
+df_truncated = df_test_seasons[(df_test_seasons['correct_adaboost'] == df_test_seasons['correct']) & ]
+len(df_truncated)
+df_truncated['season_start'].unique()
+print (df_truncated.groupby('season_start')['correct'].mean())
+print()
+print (df_truncated.groupby('season_start')['correct'].count())
+
+df_truncated = df_test_seasons[(df_test_seasons['correct_adaboost'] == df_test_seasons['correct']) & (df_test_seasons['predicted_spread_deviation'] > .1) & (df_test_seasons['game'] > 15)]
+len(df_truncated)
+df_truncated['season_start'].unique()
+print (df_truncated.groupby('season_start')['correct'].mean())
+print()
+print (df_truncated.groupby('season_start')['correct'].count())
+
+
+
 
 df_season_2015_alt = df_test_seasons[df_test_seasons['season_start']==2015]
 len(df_season_2015_alt)
@@ -1155,13 +1429,42 @@ print('games in season:', len(df_season_2015_alt))
 df_season = df_season_2015[df_season_2015['correct_both_agree']==1].copy(deep=True)
 df_season = df_season.reset_index(drop=True)
 
-df_season = df_test_seasons[df_test_seasons['season_start']>2013]
-df_season = df_season.reset_index(drop=True)
 
+results = smf.ols(formula = 'point_difference ~ spread + home_court_advantage_2', data=df_test_seasons).fit()
+print(results.summary())
+
+iv_variables
+
+#--------------
+# create df that only wins at...51% Is this the worse I could do? Probably, with 
+# the spread in the model, don't see how could do much worse.
+#cumulative_money_list[10:20] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[500:520] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[1000:1020] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[1500:1520] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[2000:2020] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[200:220] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[1200:1220] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[2200:2220] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[700:720] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[1700:1720] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[2300:2320] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[600:620] = [0,0,0,0,0,0,0,0,0,0]
+#cumulative_money_list[1600:1620] = [0,0,0,0,0,0,0,0,0,0]
+
+#----------------------------------------------------------
+# plot winnings
+
+df_season = df_test_seasons[(df_test_seasons['season_start']>2012) & (df_test_seasons['season_start']<2016)]
+df_season = df_season.reset_index(drop=True)
+len(df_season)
 
 cumulative_money_list = []
-df_season_truncated = df_season[df_season['game'] > 20]
-df_season_truncated = df_season_truncated[df_season_truncated['predicted_spread_deviation'] > .25]
+df_season_truncated = df_season[(df_season['correct_adaboost'] == df_season['correct'])]
+df_season_truncated = df_season[(df_season['game'] > 15)]
+df_season_truncated = df_season_truncated[df_season_truncated['predicted_spread_deviation'] > .1]
+df_season_truncated = df_season_truncated[(df_season_truncated['correct_adaboost'] == df_season_truncated['correct'])]
+
 df_season_truncated = df_season_truncated.reset_index(drop=True)
 for i in range(len(df_season_truncated)):
     outcome = df_season_truncated[['correct']][df_season_truncated.index == i].values
@@ -1169,14 +1472,20 @@ for i in range(len(df_season_truncated)):
 
 cumulative_money_list = [o[0][0] for o in cumulative_money_list]
 len(cumulative_money_list)
-#len(cumulative_money_list)
-#print(cumulative_money_list[:10])
+df_wins = pd.DataFrame(cumulative_money_list)
+df_wins = df_wins.reset_index()
+df_wins.rename(columns={0:'wins'}, inplace=True)
+len(df_wins[df_wins['wins'].isnull()])
+actual_win_pct = str(round(df_wins['wins'].mean(), 3))
 
 
 # i like using the kelly formula here -- it mitigates the troughs? less fluctuation
 
 # regular appraoch:
-win_probability = .52
+win_probability = .535 # put pct I think we can realistically win at.
+# kelly formula says that if i can put the actual pct, i'll maximize the winnings
+# but the toal pot gets more and more volatilse the higher it goes, i.e., betting more and more
+# so makes some sense to put a more conservative estimate, under what I think we'll get
 kelly_criteria = (win_probability * .95 - (1 - win_probability)) / .95
 money = 10000
 bet = money * kelly_criteria
@@ -1195,7 +1504,7 @@ for game in cumulative_money_list:
         bet = bet
 
 # kelly approach:
-win_probability = .52
+win_probability = .535
 kelly_criteria = (win_probability * .95 - (1 - win_probability)) / .95
 money_kelly = 10000
 bet_kelly = money_kelly * kelly_criteria
@@ -1214,19 +1523,62 @@ for game in cumulative_money_list:
         bet_kelly = money_kelly * kelly_criteria
 
 
-
+# plot winnings
 plt.plot(total_winnings_list, alpha=.4, color='purple', linewidth=2)
 plt.plot(total_winnings_kelly_list, alpha=.4, color='green', linewidth=2)
 plt.xlabel('\n games', fontsize=15)
 plt.ylabel('winnings', fontsize=15)
-plt.xlim(0,1700)
-#plt.xlim(0,1100)
-plt.ylim(-5000,25000)
+plt.xlim(0,len(total_winnings_kelly_list)+100)
+plt.xlim(0,500)
+plt.ylim(min(total_winnings_kelly_list)-5000,max(total_winnings_kelly_list)+5000)
+plt.ylim(min(total_winnings_kelly_list)-5000,70000)
 plt.axhline(.5, linestyle='--', color='black', linewidth=1, alpha=.5)
 plt.grid(axis='y', alpha=.2)
-plt.title('winnings regular: $' + str(int(total_winnings_list[-1]))+ '\n winnings kelly: $' + str(int(total_winnings_kelly_list[-1])), fontsize=15)
+plt.title('win percentage: '+actual_win_pct+'\n\n' + 'winnings regular: $' + str(int(total_winnings_list[-1]))+ '\n winnings kelly: $' + str(int(total_winnings_kelly_list[-1])), fontsize=15)
 #plt.title('total pot: $' + str(int(money)))
 sns.despine()
+
+
+
+# seems approach may be to start with a win_probability that'll get the pot
+# up fairly quickly while still being conservative. and then will have to 
+# shrink the win_probability, i.e., to shrink the percentage of the pot we're 
+# gambing each game. Because it'll get way to high too quickly. betting more
+# than 8,000 at pinnacle is harder. or at leaset you have to make two bets 
+# and then the odds change a bit. BUT if we can bet totals too, then we can 
+# increase the number of times we're betting, and so still stay under 8,000
+# per bet while making a lot.
+
+
+#------------------------------------------------------------------------------
+# with all vars in, what's signif?
+string_for_regression = ''
+for var in iv_variables:
+    print(var)
+    string_for_regression += ' + ' + var
+
+string_for_regression = string_for_regression[3:]    
+    
+model_plot = smf.ols(formula = 'point_difference ~ ' + string_for_regression,
+                data=df_covers_bball_ref_home_train).fit()  
+print(model_plot.summary()) 
+
+# what happens if i take all vars out of model with ps > .5?
+
+# biggest effect is:
+# difference_current_spread_vs_spread_ewma         
+# what does this mean? can i capitalize more on this somehow? expand on this?
+# it's saying that if a teams has been favored by a lot in the past, but they're
+# favored by even more this game, then the point diff will be prett big.
+# but I think i meant do do something diff here: to compute the diff between
+# past spreads between team and oppt. and then compare this to the spread. right?
+
+
+for var in iv_variables:
+    print(var)
+
+
+
 
 
 
