@@ -435,7 +435,6 @@ df_covers_bball_ref.loc[:, 'the_team_pace'] = df_covers_bball_ref[['team_possess
 df_covers_bball_ref[['team_possessions', 'opponent_possessions', 'the_team_pace']].head(20)
 
 
-
 # assign the totals and spread variables
 def assigne_spread_and_totals(df_covers_bball_ref, spread_to_use, totals_to_use):
     df_covers_bball_ref.loc[:, 'totals_covers'] = df_covers_bball_ref.loc[:, 'totals']
@@ -448,9 +447,19 @@ def assigne_spread_and_totals(df_covers_bball_ref, spread_to_use, totals_to_use)
     #df_covers_bball_ref.loc[:, 'spread'] = df_covers_bball_ref.loc[:, 'team_close_spread']
     return df_covers_bball_ref
 
-df_covers_bball_ref = assigne_spread_and_totals(df_covers_bball_ref, 'team_open_spread', 'Opening Total')
+#df_covers_bball_ref = assigne_spread_and_totals(df_covers_bball_ref, 'team_open_spread', 'Opening Total')
 #df_covers_bball_ref = assigne_spread_and_totals(df_covers_bball_ref, 'team_close_spread', 'Closing Total')
-#df_covers_bball_ref = assigne_spread_and_totals(df_covers_bball_ref, 'spread', 'totals')
+df_covers_bball_ref = assigne_spread_and_totals(df_covers_bball_ref, 'spread', 'totals')
+
+
+df_covers_bball_ref.loc[:,'totals_abs_diff'] = np.abs(df_covers_bball_ref.loc[:,'totals_covers'] - df_covers_bball_ref.loc[:,'Closing Total'])
+df_covers_bball_ref['spread_abs_diff'] = np.abs(df_covers_bball_ref.loc[:,'spread_covers'] - df_covers_bball_ref.loc[:,'team_close_spread'])
+df_covers_bball_ref[['totals_abs_diff', 'spread_abs_diff']].hist()
+df_covers_bball_ref[['date', 'spread', 'spread_covers', 'team_close_spread', 'spread_abs_diff']].sort_values(by='spread_abs_diff', ascending=False).head(40)
+df_covers_bball_ref[['date', 'totals', 'totals_covers', 'Closing Total', 'totals_abs_diff']].sort_values(by='totals_abs_diff', ascending=False).head(50)
+
+#df_covers_bball_ref.loc[df_covers_bball_ref['totals_abs_diff']>4,'totals']=np.nan
+#df_covers_bball_ref.loc[df_covers_bball_ref['spread_abs_diff']>6,'spread']=np.nan
 
 
 def create_variables_covers(df_teams_covers):
@@ -506,9 +515,14 @@ variables_for_team_metrics = ['team_3PAr', 'team_ASTpct', 'team_BLKpct', 'team_D
 #------------------------------------------------------------------------------
 # OPTIONAL - add noise to the spread:
 # try again, but randomly add .5 or subtract .5 from spread. more akin to what will actually see?
-#df_covers_bball_ref['random_number'] = np.random.normal(0, .2, len(df_covers_bball_ref))
-#df_covers_bball_ref['random_number'].hist(alpha=.7)
-#df_covers_bball_ref['spread'] = df_covers_bball_ref.loc[:, 'spread'] + df_covers_bball_ref.loc[:, 'random_number']
+df_covers_bball_ref['random_number'] = np.random.normal(0, .4, len(df_covers_bball_ref))
+df_covers_bball_ref['random_number'].hist(alpha=.7)
+df_covers_bball_ref['totals'] = df_covers_bball_ref.loc[:, 'totals'] + df_covers_bball_ref.loc[:, 'random_number']
+
+df_covers_bball_ref['random_number'] = np.random.normal(0, .4, len(df_covers_bball_ref))
+df_covers_bball_ref['random_number'].hist(alpha=.7)
+df_covers_bball_ref['spread'] = df_covers_bball_ref.loc[:, 'spread'] + df_covers_bball_ref.loc[:, 'random_number']
+
 #
 ## use ending spread or starting spread?
 ## ending spread is likely more accurate
@@ -1322,7 +1336,8 @@ variables_for_df = ['date', 'team', 'opponent', 'venue', 'lineup_count', 'score_
        'opponent_tov_ewma_15','venue_x_ewma_15','beat_spread_ewma_15',
        'spread_ewma_15','score_team_ewma_15','score_oppt_ewma_15','current_spread_vs_spread_ewma',
        'the_oppt_predicted_points_ewma_15', 'team_possessions', 'opponent_possessions', 
-       'team_possessions_ewma_15', 'opponent_possessions_ewma_15', 'Opening Total', 'Closing Total']
+       'team_possessions_ewma_15', 'opponent_possessions_ewma_15', 'Opening Total', 
+       'Closing Total', 'team_close_spread', 'team_open_spread', 'totals_abs_diff', 'totals_covers']
 
 
 # include all vars i want to precict with
@@ -1363,7 +1378,8 @@ variables_for_df = ['date', 'team', 'opponent', 'venue', 'lineup_count', 'score_
 #'current_spread_vs_spread_ewma'] 
   
 
-iv_variables = ['game', 'beat_spread_last_g', 'lineup_count', 'spread', 'spread_abs_val', #'totals',
+# put in totals
+iv_variables = ['game', 'beat_spread_last_g', 'lineup_count', 'spread', 'totals', 'spread_abs_val', # 'totals',
 'days_rest', 'distance_playoffs_abs', 'the_team_predicted_points', #'totals_ewma_15',
 'home_team_score_advantage', 'home_oppt_score_advantage', 'the_oppt_predicted_points', 
 'team_3PAr_ewma_15','team_ASTpct_ewma_15','team_BLKpct_ewma_15','team_DRBpct_ewma_15',
@@ -1375,7 +1391,7 @@ iv_variables = ['game', 'beat_spread_last_g', 'lineup_count', 'spread', 'spread_
 'opponent_ORBpct_ewma_15','opponent_ORtg_ewma_15','opponent_STLpct_ewma_15','opponent_TOVpct_ewma_15',
 'opponent_TRBpct_ewma_15','opponent_TSpct_ewma_15','opponent_eFGpct_ewma_15','opponent_fg3_pct_ewma_15',
 'opponent_fg_pct_ewma_15','opponent_ft_pct_ewma_15','opponent_pf_ewma_15','venue_x_ewma_15', 'spread_ewma_15',
-'team_possessions_ewma_15', 'the_oppt_predicted_points_ewma_15', # 
+'team_possessions_ewma_15', 'the_oppt_predicted_points_ewma_15',  
 'opponent_possessions_ewma_15', 'score_team_ewma_15', 'score_oppt_ewma_15'] 
 #'current_totals_vs_totals_ewma', #'current_spread_vs_spread_ewma', 'beat_spread_ewma_15',
 
@@ -1489,16 +1505,20 @@ df_covers_bball_ref = create_basic_variables(df_covers_bball_ref)
 # oppt over the last 6 games.
 
 
+def add_past_oppt_ewma(df_covers_bball_ref, iv_variables):
 # i liked the below set of code. produced consistent resulst form year to year
-for iv in iv_variables:
-    if iv[-7:]=='ewma_15' and (iv[:3]=='tea' or iv[:3]=='opp'):
-        print(iv)
-        iv_variables = iv_variables + ['x_'+iv]
-        df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=4))
-        df_covers_bball_ref['x_'+iv+'_ewma_2'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=10))
-        # avg the ewma_15 and ewma_5
-        df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref[['x_'+iv+'_ewma', 'x_'+iv+'_ewma_2']].mean(axis=1)
-        iv_variables = iv_variables + ['x_'+iv+'_ewma']
+    for iv in iv_variables:
+        if iv[-7:]=='ewma_15' and (iv[:3]=='tea' or iv[:3]=='opp'):
+            print(iv)
+            iv_variables = iv_variables + ['x_'+iv]
+            df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=4))
+            df_covers_bball_ref['x_'+iv+'_ewma_2'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=10))
+            # avg the ewma_15 and ewma_5
+            df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref[['x_'+iv+'_ewma', 'x_'+iv+'_ewma_2']].mean(axis=1)
+            iv_variables = iv_variables + ['x_'+iv+'_ewma']
+    return df_covers_bball_ref, iv_variables
+
+df_covers_bball_ref, iv_variables = add_past_oppt_ewma(df_covers_bball_ref, iv_variables)
 
 # this below code seemed to make worse. figure out which var(s) made worse
 # why don't i have oppt day's rest in here? and all other x_vars! distance from playoffs, etc.
@@ -1511,20 +1531,23 @@ iv_variables_more = ['days_rest' ,'spread_ewma_15', 'score_team_ewma_15',
 #                     'score_oppt_ewma_15', 'distance_playoffs_abs', 'the_team_predicted_points_ewma_15', 
 #                     'the_oppt_predicted_points_ewma_15']
 
-for iv in iv_variables_more:    
-    print(iv)
-    iv_variables = iv_variables + ['x_'+iv]
-    df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=4))
-    df_covers_bball_ref['x_'+iv+'_ewma_2'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=10))
-    # avg the ewma_15 and ewma_5
-    df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref[['x_'+iv+'_ewma', 'x_'+iv+'_ewma_2']].mean(axis=1)
-    iv_variables = iv_variables + ['x_'+iv+'_ewma']
-    print(iv)
+def add_more_past_oppt_ewma(df_covers_bball_ref, iv_variables, iv_variables_more):
+    for iv in iv_variables_more:    
+        print(iv)
+        iv_variables = iv_variables + ['x_'+iv]
+        df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=4))
+        df_covers_bball_ref['x_'+iv+'_ewma_2'] = df_covers_bball_ref.groupby('team')['x_'+iv].transform(lambda x: pd.ewma(x.shift(1), span=10))
+        # avg the ewma_15 and ewma_5
+        df_covers_bball_ref['x_'+iv+'_ewma'] = df_covers_bball_ref[['x_'+iv+'_ewma', 'x_'+iv+'_ewma_2']].mean(axis=1)
+        iv_variables = iv_variables + ['x_'+iv+'_ewma']
+        print(iv)
+    
+    iv_variables.remove('the_team_predicted_points_ewma_15')
+    iv_variables.remove('the_oppt_predicted_points_ewma_15')
+    #iv_variables.remove('distance_playoffs_abs')
+    return df_covers_bball_ref, iv_variables
 
-iv_variables.remove('the_team_predicted_points_ewma_15')
-iv_variables.remove('the_oppt_predicted_points_ewma_15')
-#iv_variables.remove('distance_playoffs_abs')
-
+df_covers_bball_ref, iv_variables = add_more_past_oppt_ewma(df_covers_bball_ref, iv_variables, iv_variables_more)
 
 
 # skip for totals prediction
@@ -1620,6 +1643,8 @@ df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.sort_values(
 df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.reset_index(drop=True)
 print('\n number of games without nans:', (len(df_covers_bball_ref__dropna_home)))
 #df_covers_bball_ref__dropna_home[['date','team','spread']]
+
+
 
 #for col in df_covers_bball_ref.columns:
 #    if len(df_covers_bball_ref[df_covers_bball_ref[col].notnull()]) < 15000:
@@ -2028,11 +2053,10 @@ df_covers_bball_ref_home[['difference_team_ASTpct_ewma_15', 'difference_team_AST
 
 # but, the overall means look a bit more consistent. only 2010 is crappy. so don't necessarily give up on this
 
-
 # ----------------------------
 # functions for final analysis
 
-def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, test_year):
+def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, test_year, iv_variables):
     #df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < test_year) &
     #                                                                  (df_covers_bball_ref__dropna_home['season_start'] > test_year-7)]
     df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < test_year) &
@@ -2046,9 +2070,32 @@ def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, test_year):
     df_covers_bball_ref_home_test = df_covers_bball_ref_home_test.sort_values(by=['team','date'])
     df_covers_bball_ref_home_test = df_covers_bball_ref_home_test.reset_index(drop=True)
     print ('test n:', len(df_covers_bball_ref_home_test))
+
+    # to test whether can train model on opening lines but predict w closing line
+    df_covers_bball_ref_home_test['totals'] = df_covers_bball_ref_home_test['Closing Total']
+    df_covers_bball_ref_home_test['spread'] = df_covers_bball_ref_home_test['team_close_spread']
+
+    df_covers_bball_ref_home_train['total_to_bet'] = df_covers_bball_ref_home_train ['totals'] 
+    df_covers_bball_ref_home_test['total_to_bet'] = df_covers_bball_ref_home_test ['totals'] 
+    for var in iv_variables:  
+        var_mean = df_covers_bball_ref_home_train[var].mean()
+        var_std = df_covers_bball_ref_home_train[var].std()
+        df_covers_bball_ref_home_train[var] = (df_covers_bball_ref_home_train[var] -  var_mean) / var_std    
+        df_covers_bball_ref_home_test[var] = (df_covers_bball_ref_home_test[var] -  var_mean) / var_std    
+
     return df_covers_bball_ref_home_train, df_covers_bball_ref_home_test
 
-#df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, 2010)
+#df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, 2010, iv_variables)
+
+
+# IF WANT TO ADD INTERACTIONS W STANDARDIZED VARS, DO HERE, LIKE THIS
+#def add_interactions(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df):
+#    df_covers_bball_ref_home_train['game_x_playoff_distance'] = df_covers_bball_ref_home_train['game'] * df_covers_bball_ref_home_train['difference_distance_playoffs_abs']
+#    df_covers_bball_ref_home_test['game_x_playoff_distance'] = df_covers_bball_ref_home_test['game'] * df_covers_bball_ref_home_test['difference_distance_playoffs_abs']
+#    iv_variables = iv_variables + ['game_x_playoff_distance']
+#    variables_for_df = variables_for_df + ['game_x_playoff_distance']
+#    return df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df
+
 
 
 # doing this above instead
@@ -2130,32 +2177,32 @@ def mse_in_training_set(df_covers_bball_ref_home_train, algorithm, iv_variables)
 #    return df
 
 
-def create_correct_metric(df):
-    df['correct'] = np.nan
-    df.loc[(df['point_total_predicted'] > df['totals']) &
-                                       (df['over_win'] == '1'), 'correct'] = 1
-    df.loc[(df['point_total_predicted'] < df['totals']) &
-                                       (df['over_win'] == '0'), 'correct'] = 1
-    df.loc[(df['point_total_predicted'] > df['totals']) &
-                                       (df['over_win'] == '0'), 'correct'] = 0
-    df.loc[(df['point_total_predicted'] < df['totals']) &
-                                       (df['over_win'] == '1'), 'correct'] = 0
-    # create var to say how much my prediction deviates from actual spread:
-    df['predicted_totals_deviation'] = np.abs(df['totals'] - df['point_total_predicted'])
-    return df
+#def create_correct_metric(df):
+#    df['correct'] = np.nan
+#    df.loc[(df['point_total_predicted'] > df['totals']) &
+#                                       (df['over_win'] == '1'), 'correct'] = 1
+#    df.loc[(df['point_total_predicted'] < df['totals']) &
+#                                       (df['over_win'] == '0'), 'correct'] = 1
+#    df.loc[(df['point_total_predicted'] > df['totals']) &
+#                                       (df['over_win'] == '0'), 'correct'] = 0
+#    df.loc[(df['point_total_predicted'] < df['totals']) &
+#                                       (df['over_win'] == '1'), 'correct'] = 0
+#    # create var to say how much my prediction deviates from actual spread:
+#    df['predicted_totals_deviation'] = np.abs(df['totals'] - df['point_total_predicted'])
+#    return df
 
 def create_correct_metric(df):
     df['correct'] = np.nan
-    df.loc[(df['point_total_predicted'] > df['totals']) &
-                                       (df['point_total'] > df['totals']), 'correct'] = 1
-    df.loc[(df['point_total_predicted'] > df['totals']) &
-                                       (df['point_total'] < df['totals']), 'correct'] = 0
-    df.loc[(df['point_total_predicted'] < df['totals']) &
-                                       (df['point_total'] < df['totals']), 'correct'] = 1
-    df.loc[(df['point_total_predicted'] < df['totals']) &
-                                       (df['point_total'] > df['totals']), 'correct'] = 0
+    df.loc[(df['point_total_predicted'] > df['total_to_bet']) &
+                                       (df['point_total'] > df['total_to_bet']), 'correct'] = 1
+    df.loc[(df['point_total_predicted'] > df['total_to_bet']) &
+                                       (df['point_total'] < df['total_to_bet']), 'correct'] = 0
+    df.loc[(df['point_total_predicted'] < df['total_to_bet']) &
+                                       (df['point_total'] < df['total_to_bet']), 'correct'] = 1
+    df.loc[(df['point_total_predicted'] < df['total_to_bet']) &
+                                       (df['point_total'] > df['total_to_bet']), 'correct'] = 0
     # create var to say how much my prediction deviates from actual spread:
-    df['predicted_totals_deviation'] = np.abs(df['totals'] - df['point_total_predicted'])
+    df['predicted_totals_deviation'] = np.abs(df['total_to_bet'] - df['point_total_predicted'])
     return df
 
 #def create_correct_metric(df):
@@ -2240,7 +2287,7 @@ for iv in iv_variables[:]:
     print(len(df_covers_bball_ref_home_train[df_covers_bball_ref_home_train[iv].isnull()]))
 
 
-def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables):
+def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables, dv_var):
 
     # trains model using poisson regression or quantile regression.
     # this didn't improve my predictions, still predicting over too often  
@@ -2451,7 +2498,7 @@ seasons = [2011, 2012, 2013, 2014, 2015]
 seasons = [2010, 2011, 2012, 2013]
 seasons = [2013, 2014, 2015]
 
-model = linear_model.Ridge(alpha=10)  # higher number regularize more, 
+model = linear_model.Ridge(alpha=1)  # higher number regularize more, 
 # but even .0001 or something like that is adding a decent amount of regularization
 # doesn't seem to be helping a lot to predict team score (cube root)
 
@@ -2511,6 +2558,7 @@ model = svm.LinearSVR(C=10)  #
 model = svm.LinearSVR(C=.05)  #  best according to grid search
 model = svm.LinearSVR(C=.1)  #  
 model = svm.LinearSVR(C=.01)  
+model = svm.LinearSVR(C=.001)  
 
 #model = svm.LinearSVR(C=1, intercept_scaling=.1)  
 #model = svm.LinearSVR(C=.05, intercept_scaling=10)  
@@ -2529,20 +2577,20 @@ model = svm.LinearSVR(C=.01)
 #n_estimators see [R2007].
 
 
-def analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, algorithm, iv_variables):
+def analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, algorithm, iv_variables, dv_var):
     accuracy_list = []
     mean_sq_error_list = []
     df_test_seasons = pd.DataFrame()
     #df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['season_start']!=2011]
     for season in seasons:
         print(season)
-        df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, season)
+        df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, season, iv_variables)
         #df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['season_start'] != 2011]  #shortened season. helps a bit.
         #df_covers_bball_ref_home_train = create_df_weight_recent_seasons_more(df_covers_bball_ref_home_train)
         # AT MOMENT, THIS TOTALLY RUNIS IT:        
         #df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables_to_analyze = standardize_ivs(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables)
         #df_covers_bball_ref_home_test = create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables_to_analyze)
-        df_covers_bball_ref_home_test, df_covers_bball_ref_home_train = create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables)
+        df_covers_bball_ref_home_test, df_covers_bball_ref_home_train = create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables, dv_var)
 
         df_covers_bball_ref_home_test.loc[:,'absolute_error'] = np.abs(df_covers_bball_ref_home_test.loc[:,'point_total_predicted'] - df_covers_bball_ref_home_test.loc[:,'point_total'])
         #df_covers_bball_ref_home_test['absolute_error'] = np.abs(df_covers_bball_ref_home_test['point_total_predicted'] + df_covers_bball_ref_home_test['spread'])
@@ -2562,7 +2610,7 @@ def analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, algorith
 #accuracy_list, mean_sq_error_list, df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, model, iv_variables)
 # USE THIS IF SCALED WAY ABOVE
 
-accuracy_list, mean_sq_error_list, df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, model, iv_variables)
+accuracy_list, mean_sq_error_list, df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, model, iv_variables, dv_var)
 
 df = pd.DataFrame(accuracy_list, columns=['season', 'accuracy'])
 df_mse = pd.DataFrame(mean_sq_error_list, columns=['season', 'error'])
@@ -2578,6 +2626,7 @@ sns.despine()
 [print(str(year)+':', accuracy) for year, accuracy in accuracy_list]
 
 
+df_test_seasons[iv_variables].mean()
 df_test_seasons.to_csv('test_totals_seasons.csv')
 
 
@@ -2682,9 +2731,8 @@ df_test_seasons[['point_total_predicted', 'point_diff_predicted_alt_model']].cor
 plt.scatter(df_test_seasons['point_total_predicted'], df_test_seasons['point_diff_predicted_alt_model'], alpha=.3)
 sns.lmplot(x='point_total_predicted', y='point_diff_predicted_alt_model', data=df_test_seasons, scatter_kws={'alpha':.05})
 
-df_test_seasons[['correct', 'correct_alt_model']].tail(20)
+df_test_seasons[['correct', 'correct_alt_model']].head(20)
 df_test_seasons[['correct', 'correct_alt_model']].corr()
-
 
 df_test_seasons['point_diff_predicted_two_models'] = df_test_seasons[['point_total_predicted', 'point_diff_predicted_alt_model']].mean(axis=1)
 df_test_seasons[['point_total_predicted', 'point_diff_predicted_alt_model', 'point_diff_predicted_two_models']].tail(20)
@@ -2710,6 +2758,19 @@ df_test_seasons[['correct', 'correct_alt_model', 'correct_two_models']].corr()
 
 
 
+sns.barplot(x='correct', y='totals_abs_diff', data=df_test_seasons)
+plt.ylim(.15,.26)
+sns.despine()
+
+sns.lmplot(x='totals_abs_diff', y='correct', data=df_test_seasons, logistic=True)
+sns.lmplot(x='totals_abs_diff', y='correct', data=df_test_seasons)
+
+df_test = df_test_seasons[df_test_seasons['totals_abs_diff']>3]
+sns.lmplot(x='totals_covers', y='point_total', data=df_test)
+sns.lmplot(x='Closing Total', y='point_total', data=df_test)
+df_test[['totals_covers', 'Closing Total', 'point_total']].corr()
+
+
 #-------------------------------------------
 # CAN I MAKE THICKNESS OF LINE CORRESPOND TO SAMPLE SIZE AT THAT POINT?
 # THAT WOULD BE A REALLY HELPFUL THING GENERALLY
@@ -2729,7 +2790,7 @@ n, bins, patches = plt.hist(df_test_seasons['predicted_totals_deviation'], bin_n
 #plt.bar(bins[:-1], n, width=bins[1]-bins[0], alpha=.1, color='white')
 
 sns.lmplot(x='predicted_totals_deviation', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.5, 'color':'blue'})
-plt.ylim(.4, .6)
+plt.ylim(.44, .65)
 plt.xlim(-.1,6)
 #plt.grid(axis='y', linestyle='--', alpha=.75)
 max_n = n.max()
@@ -2815,26 +2876,26 @@ print('betting on all games:')
 [print(str(year)+':', accuracy) for year, accuracy in accuracy_list]
 
 #df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .5) & (df_test_seasons['predicted_spread_deviation'] < 3)]
-df_truncated = df_test_seasons[(df_test_seasons['predicted_totals_deviation'] > 1.75)]
+df_truncated = df_test_seasons[(df_test_seasons['predicted_totals_deviation'] > 1)]
 df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
 print (df_truncated.groupby('season_start')['correct'].count())
 
-df_truncated = df_test_seasons[(df_test_seasons['game'] > 1)]
+df_truncated = df_test_seasons[(df_test_seasons['game'] > -1)]
 df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
 print (df_truncated.groupby('season_start')['correct'].count())
 
-df_truncated = df_test_seasons[(df_test_seasons['predicted_totals_deviation'] > .01) & (df_test_seasons['game'] > 1)]
+df_truncated = df_test_seasons[(df_test_seasons['predicted_totals_deviation'] > 1) & (df_test_seasons['game'] > -1)]
 df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
 print (df_truncated.groupby('season_start')['correct'].count())
 
 # no restrictions:
-df_truncated = df_test_seasons[(df_test_seasons['predicted_totals_deviation'] > 0) & (df_test_seasons['game'] > 0)]
+df_truncated = df_test_seasons[(df_test_seasons['predicted_totals_deviation'] > 0) & (df_test_seasons['game'] > -10)]
 df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
@@ -2865,11 +2926,34 @@ print (df_truncated.groupby('season_start')['correct'].count())
 # in a better win % than using normal svr, it makes more because leaves more games
 # to bet on. ALTER CODE SO CAN INCORPORATE 3-4 ALGOS INSTEAD OF JUST TWO.
 
+# compute var to say whether the two models agree or not
+df_test_seasons
+df_test_seasons['total_predicted_side_of_totals'] = np.nan
+df_test_seasons.loc[df_test_seasons['point_total_predicted']>df_test_seasons['totals'], 'total_predicted_side_of_totals'] = 1
+df_test_seasons.loc[df_test_seasons['point_total_predicted']<df_test_seasons['totals'], 'total_predicted_side_of_totals'] = -1
+df_test_seasons['total_predicted_als_side_of_totals'] = np.nan
+df_test_seasons.loc[df_test_seasons['point_diff_predicted_alt_model']>df_test_seasons['totals'], 'total_predicted_als_side_of_totals'] = 1
+df_test_seasons.loc[df_test_seasons['point_diff_predicted_alt_model']<df_test_seasons['totals'], 'total_predicted_als_side_of_totals'] = -1
+df_test_seasons['models_agree'] = 0
+df_test_seasons.loc[(df_test_seasons['total_predicted_side_of_totals'] == df_test_seasons['total_predicted_als_side_of_totals']), 'models_agree'] = 1
+df_test_seasons['models_agree'].mean()
+
+print('betting on all games:')
+[print(str(year)+':', accuracy) for year, accuracy in accuracy_list]
+
+df_truncated = df_test_seasons[(df_test_seasons['models_agree'] == 1)]
+df_truncated['season_start'].unique()
+print (df_truncated.groupby('season_start')['correct'].mean())
+print()
+print (df_truncated.groupby('season_start')['correct'].count())
+
+
+
 
 #----------------------------------------------------------
 # plot winnings
 
-df_season = df_test_seasons[(df_test_seasons['season_start']>2012) & (df_test_seasons['season_start']<2014)]
+df_season = df_test_seasons[(df_test_seasons['season_start']>2012) & (df_test_seasons['season_start']<2016)]
 df_season = df_season.reset_index(drop=True)
 len(df_season)
 
