@@ -400,7 +400,7 @@ print(len(box_score_links_list))
 #print(box_score_links_list[:])
 
 
-link = box_score_links_list[0]
+#link = box_score_links_list[0]
 def get_box_score_soup_object(link): 
     base_link = 'http://www.basketball-reference.com'
     box_score_page = base_link+link
@@ -454,14 +454,18 @@ def give_game_stats(soupObject):
     table_bodies = soupObject.find_all('tfoot')
     team1_basic_stats = table_bodies[0]
     table_data = team1_basic_stats.find_all('td')
-    team1_basic_stats_list = [float(stat.text) for stat in table_data[0:-1]]
+    team1_basic_stats_list = [float(stat.text) for stat in table_data[0:]]
+    # use this below instead of line above if the code isn't working. at some point they add a plus/minus col to end so need to get rid of that
+    #team1_basic_stats_list = [float(stat.text) for stat in table_data[0:-1]]
     team1_adv_stats = table_bodies[1]
     table_data = team1_adv_stats.find_all('td')
     team1_adv_stats_list = [float(stat.text) for stat in table_data[0:]]
     # team 2 
     team2_basic_stats = table_bodies[2]
     table_data = team2_basic_stats.find_all('td')
-    team2_basic_stats_list = [float(stat.text) for stat in table_data[0:-1]]
+    team2_basic_stats_list = [float(stat.text) for stat in table_data[0:]]
+    # use this below instead of line above if the code isn't working. at some point they add a plus/minus col to end so need to get rid of that
+    #team2_basic_stats_list = [float(stat.text) for stat in table_data[0:-1]]
     team2_adv_stats = table_bodies[3]
     table_data = team2_adv_stats.find_all('td')
     team2_adv_stats_list = [float(stat.text) for stat in table_data[0:]]
@@ -534,7 +538,7 @@ cols = ['date', 'home_team', 'away_team', 'home_team_mp', 'home_team_fg', 'home_
 # 103.0]
 
 
-link = box_score_links_list[0]
+#link = box_score_links_list[0]
 def get_data_from_all_box_scores(box_score_links_list, cols):
     df_all_games = pd.DataFrame()
     counter = 0
@@ -982,7 +986,7 @@ def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_
     df_covers_bball_ref = df_covers_bball_ref.reset_index(drop=True)
     for var in variables_for_team_metrics:
         var_ewma = var + '_ewma_15'
-        var_ewma_2 = var + '_ewma'
+        #var_ewma_2 = var + '_ewma'
 
         # i have played around with span=x in line below
         # 50 is worse than 20; 25 is worse than 20; 15 is better than 20; 10 is worse than 15; 16 is worse than 15; 14 is worse than 15
@@ -992,13 +996,13 @@ def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_
         #df_covers_bball_ref[var_ewma_2] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.ewma(x.shift(1), span=20)) 
         #df_covers_bball_ref[var_ewma] = df_covers_bball_ref[[var_ewma, var_ewma_2]].mean(axis=1)
 
-# insert code to detect outliers -- see below for start of it
+    # insert code to detect outliers -- see below for start of it
 
     df_covers_bball_ref['beat_spread_std_ewma_15'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.ewmstd(x.shift(1), span=15))
     df_covers_bball_ref['current_spread_vs_spread_ewma'] = df_covers_bball_ref.loc[:, 'spread'] - df_covers_bball_ref.loc[:, 'spread_ewma_15']
-    # CAN'T GROUP BY STARTERS WHEN AUTOMATING. BECAUSE DON'T KNOW STARTERS FOR CURRENT GAME    
     df_covers_bball_ref['starters_team_lag'] = df_covers_bball_ref['starters_team'].shift(1)
     df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team_lag').cumcount()+1              
+    # CAN'T GROUP BY STARTERS WHEN AUTOMATING. BECAUSE DON'T KNOW STARTERS FOR CURRENT GAME    
     #df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x.shift(1)))                
     #df_covers_bball_ref.loc[df_covers_bball_ref['lineup_count'].isnull(), 'lineup_count'] = 0 
     #df_covers_bball_ref['beat_spread'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_max(x.shift(1), window=15))
@@ -1081,7 +1085,6 @@ df_covers_bball_ref['team_zone'] = df_covers_bball_ref['team'].map(team_to_zone_
 df_covers_bball_ref['opponent_zone'] = df_covers_bball_ref['opponent'].map(team_to_zone_dict)
 #df_covers_bball_ref.loc[:, 'zone_distance'] = df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone']
 #df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==0, 'zone_distance'] = 0
-
 # also try alt zone_distance
 df_covers_bball_ref['zone_distance'] = np.nan
 df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==0, 'zone_distance'] = np.abs(df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
@@ -1390,7 +1393,7 @@ iv_variables = ['spread', 'totals', 'lineup_count',
        'opponent_STLpct_ewma_15', 'opponent_TOVpct_ewma_15', 'opponent_TRBpct_ewma_15', 
        'opponent_TSpct_ewma_15', 'opponent_eFGpct_ewma_15', 'opponent_fg3_pct_ewma_15',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15', 'opponent_pf_ewma_15', 
-       'days_rest', 'distance_playoffs_abs', 'game']  #, 'zone_distance']  #, 'home_court_advantage'] # , 'venue_x_ewma_15' - 
+       'days_rest', 'distance_playoffs_abs', 'game', 'home_court_advantage', 'zone_distance']  #, 'zone_distance']  #, 'home_court_advantage'] # , 'venue_x_ewma_15' - 
        # don't think venue_ewma matters because i've already got spread_ewma in there
        # and that should be adjusting for the compeition and home court already in the past x games, 
        #, 'point_difference_ewma_15' 'zone_distance', 'starters_same_as_last_g']  , 'season_start'
@@ -1484,7 +1487,7 @@ def create_iv_list(iv_variables, variables_without_difference_score_list):
     iv_variables = iv_variables + spread_and_totals_list
     return iv_variables
 
-iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game'])  # zone_distance, 'season_start'
+iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'zone_distance', 'home_court_advantage'])  # zone_distance, 'season_start'
 
 
 def create_home_df(df_covers_bball_ref):
@@ -1505,13 +1508,14 @@ iv_variables = iv_variables + ['home_advantage_added', 'home_point_diff_ewma', '
 variables_for_df = variables_for_df + ['home_advantage_added', 'x_away_point_diff_ewma']
 # think about this more. am i capturing home court advantage as well as i can?
 
-df_covers_bball_ref_home.loc[:, 'home_court_advantage_difference'] = df_covers_bball_ref_home.loc[:, 'home_court_advantage'] - df_covers_bball_ref_home.loc[:, 'x_home_court_advantage']*-1
-iv_variables = iv_variables + ['home_court_advantage_difference']
-variables_for_df = variables_for_df + ['home_court_advantage_difference']
+# don't use:
+#df_covers_bball_ref_home.loc[:, 'home_court_advantage_difference'] = df_covers_bball_ref_home.loc[:, 'home_court_advantage'] - df_covers_bball_ref_home.loc[:, 'x_home_court_advantage']*-1
+#iv_variables = iv_variables + ['home_court_advantage_difference']
+#variables_for_df = variables_for_df + ['home_court_advantage_difference']
 
 
-nets = df_covers_bball_ref_home[df_covers_bball_ref_home['team']=='Brooklyn Nets']
-nets[['date', 'team', 'beat_spread', 'game', 'score_oppt', 'difference_beat_spread_last_g']][440:460]
+#nets = df_covers_bball_ref_home[df_covers_bball_ref_home['team']=='Brooklyn Nets']
+#nets[['date', 'team', 'beat_spread', 'game', 'score_oppt', 'difference_beat_spread_last_g']][440:460]
 
 # -----------------------------
 df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.copy(deep=True)
@@ -1560,6 +1564,8 @@ df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.copy(deep=True)
 def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables):
     df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < 2016) &
                                                                       (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+    # training on games only after 10. this seems to help. presumably only predict games in test set after game 10
+    df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.sort_values(by=['team','date'])
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.reset_index(drop=True)
     print ('training n:', len(df_covers_bball_ref_home_train))    
@@ -1581,6 +1587,8 @@ def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_v
 def create_train_and_test_dfs_ALT(df_covers_bball_ref__dropna_home, date_today, iv_variables):
     df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['date'] < date_today) &
                                                                       (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+    # training on games only after 10. this seems to help. presumably only predict games in test set after game 10
+    df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.sort_values(by=['team','date'])
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.reset_index(drop=True)
     print ('training n:', len(df_covers_bball_ref_home_train))    
@@ -1680,7 +1688,7 @@ def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_cov
 seasons = [2010, 2011, 2012, 2013, 2014, 2015]
 
 
-model = linear_model.Ridge(alpha=1)  # higher number regularize more
+model = linear_model.Ridge(alpha=10)  # higher number regularize more
 
 model = linear_model.LinearRegression()
 #algorithm = linear_model.LinearRegression()
