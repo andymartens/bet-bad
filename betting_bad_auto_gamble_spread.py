@@ -12,6 +12,9 @@ Created on Sat Oct  1 10:35:03 2016
 # need the schedule (doubled). map spreads (douobled) onto it.
 # then can merge with big df
 
+# stuff to watch for that's gone wrong:
+# - a team might not be in the pinnacle betting score
+# - the +/- in basketball reference can screw things up. should create an if/then to deal w
 
 
 # eventually, could use pinnacle api to get the spread and even to automate 
@@ -96,6 +99,24 @@ sns.set_style('white')
 
 
 
+# --------------
+# amount to bet:
+
+# enter amount in account:
+pot = 10000
+
+#win_probability = .525
+#win_probability = .53
+win_probability = .5275
+
+kelly_criteria = (win_probability * .945 - (1 - win_probability)) / .945
+bet_kelly = pot * kelly_criteria
+print(round(bet_kelly))
+print(round(bet_kelly*.9))
+print(round(bet_kelly*.8))
+
+
+
 # -----------------------------------------
 # set date:
 date_today = datetime.datetime.now().date()
@@ -103,6 +124,17 @@ year_now = date_today.year
 month_now = date_today.month
 day_now = date_today.day
 #------------------------------------------
+
+#==========================================
+# for vietnam testing one day late
+#dates_vietnam = pd.date_range('2016/11/1', str(year_now)+'/'+str(month_now)+'/'+str(day_now), freq='D')
+#date_today = dates_vietnam[-2]
+#date_today = dates_vietnam[-3]
+#date = dates_vietnam[-3]
+#year_now = date.year
+#month_now = date.month
+#day_now = date.day
+#==========================================
 
 
 # incorp moneline and opening line data
@@ -360,8 +392,6 @@ df_covers_bball_ref.rename(columns={'opp_tov':'opponent_tov'}, inplace=True)
 df_covers_bball_ref.rename(columns={'opp_trb':'opponent_trb'}, inplace=True)
 
 
-
-
 # scrape nov 1 again
 #dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')
 #date = dates[-6]  #  replace to -2 once get back days
@@ -374,7 +404,8 @@ df_covers_bball_ref.rename(columns={'opp_trb':'opponent_trb'}, inplace=True)
 # to get box scores from yesterday:
 
 dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')
-date = dates[-2]  #  replace to -2 once get back days
+date = dates[-2]  #  
+#date = dates[-3]  #  get boxes from two day ago
 day_yesterday = date.day
 month_yesterday = date.month
 year_yesterday = date.year
@@ -644,16 +675,13 @@ df_doubled.to_csv('df_'+str(year_yesterday)+'_'+str(month_yesterday)+'_'+str(day
 
 # then # loop through dates of season and open each and concat
 # to get a range of dates, from first date of season to yesterday
+#dates = pd.date_range('2016/10/25', '2016/11/5', freq='D')
 dates = pd.date_range('25/10/2016', str(month_yesterday)+'/'+str(day_yesterday)+'/'+str(year_yesterday), freq='D')
 df_this_season = pd.DataFrame()
 for date in dates:
     print(date)
     df_day = pd.read_csv('df_'+str(date.year)+'_'+str(date.month)+'_'+str(date.day)+'.csv')
     df_this_season = pd.concat([df_this_season,df_day], ignore_index=True)
-
-
-
-
 
 
 # open file for this season 
@@ -666,7 +694,6 @@ for date in dates:
 #s = df_this_season[['date','team','opponent']].astype(str)
 #x = s.values
 #x = [list(l) for l in x]
-
 
 
 len(df_covers_bball_ref)  # 29038
@@ -697,8 +724,6 @@ df_schedule_doubled = pd.concat([df_schedule_home, df_schedule_away], ignore_ind
 df_schedule_doubled = df_schedule_doubled.sort_values(by=['team', 'date'])
 df_schedule_doubled = df_schedule_doubled.reset_index(drop=True)
 df_schedule_doubled = df_schedule_doubled[['date', 'team', 'opponent', 'venue']]
-
-# EVENTUALLY WEHN GET TO PREDICTING IN TEST SET, THE TEST SET WILL BE THE DF SELECTED JUST FOR THE CURRENT DATE
 
 
 # import spread and totals that i copied from pinnacle
@@ -809,14 +834,17 @@ def produce_df_w_all_spreads_this_season(month_now, day_now, year_now):
 
 
 
+# SKIP --------------------
 # if one day ahead in viet:
 #dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')
 #date = dates[-2]  #  replace to -2 once get back days
 #day_now = date.day
 #month_now = date.month
 #year_now = date.year
+#--------------------------
 
 df_spreads_this_season = produce_df_w_all_spreads_this_season(month_now, day_now, year_now)
+#df_spreads_this_season = produce_df_w_all_spreads_this_season(11, 6, 2016)
 
 #df_odds = pd.read_excel(str(month_now)+'_'+str(day_now)+'_'+str(year_now)+'_'+'odds.xlsx')
 #df_odds = pd.read_excel('10_26_2016_odds.xlsx')
@@ -979,6 +1007,34 @@ variables_for_team_metrics = ['team_3PAr', 'team_ASTpct', 'team_BLKpct', 'team_D
 ###########  create new variables to try out in this section  #############
 # Choose one of next set of cells to create metrics for ea team/lineup
 
+
+# try instead:
+#def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_for_team_metrics):
+#    df_covers_bball_ref = df_covers_bball_ref.sort_values(by=['team','date'])
+#    df_covers_bball_ref = df_covers_bball_ref.reset_index(drop=True)
+#    for var in variables_for_team_metrics:
+#        var_ewma = var + '_ewma_15'
+#        #var_ewma_2 = var + '_ewma'
+#        # i have played around with span=x in line below
+#        # 50 is worse than 20; 25 is worse than 20; 15 is better than 20; 10 is worse than 15; 16 is worse than 15; 14 is worse than 15
+#        # stick w 15. but 12 is second best. 
+#        # (12 looks better if want to use cutoffs and bet on fewer gs. but looks like 15 will get about same pct -- 53+ -- wih 1,000 gs)
+#        df_covers_bball_ref[var_ewma] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.rolling_mean(x.shift(1), window=15)) 
+#        #df_covers_bball_ref[var_ewma_2] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.ewma(x.shift(1), span=20)) 
+#        #df_covers_bball_ref[var_ewma] = df_covers_bball_ref[[var_ewma, var_ewma_2]].mean(axis=1)
+#    df_covers_bball_ref['beat_spread_std_ewma_15'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_std(x.shift(1), window=15))
+#    df_covers_bball_ref['current_spread_vs_spread_ewma'] = df_covers_bball_ref.loc[:, 'spread'] - df_covers_bball_ref.loc[:, 'spread_ewma_15']
+#    df_covers_bball_ref['starters_team_lag'] = df_covers_bball_ref['starters_team'].shift(1)
+#    df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team_lag').cumcount()+1              
+#    # CAN'T GROUP BY STARTERS WHEN AUTOMATING. BECAUSE DON'T KNOW STARTERS FOR CURRENT GAME    
+#    #df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x.shift(1)))                
+#    #df_covers_bball_ref.loc[df_covers_bball_ref['lineup_count'].isnull(), 'lineup_count'] = 0 
+#    #df_covers_bball_ref['beat_spread'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_max(x.shift(1), window=15))
+#    return df_covers_bball_ref
+
+
+
+
 # group just by team, not by season too. need to do weighted mean or a rolling mean here.
 def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_for_team_metrics):
     #df_covers_bball_ref = df_covers_bball_ref.sort_values(by='date')
@@ -1019,8 +1075,6 @@ df_covers_bball_ref[['date', 'team_ASTpct_ewma_15', 'lineup_count', 'starters_te
 
 #df_covers_bball_ref['team_count'] = df_covers_bball_ref.groupby('team')['team_3PAr'].transform(lambda x: pd.expanding_count(x))
 #df_covers_bball_ref['team_count'] = df_covers_bball_ref.groupby('team')['team_3PAr'].transform(lambda x: pd.expanding_count(x))
-
-
 
 
 
@@ -1115,6 +1169,14 @@ df_covers_bball_ref[['date', 'team','team_zone','opponent', 'opponent_zone', 've
 # need to compute record -- win pct up to the last g first
 
 # i need to map whether ea team is in eastern or western conference
+
+#-----------------
+# compute  sort of distance from the playoffs
+# need to compute record -- win pct up to the last g first
+# compute sort sort of distance from the playoffs
+# need to compute record -- win pct up to the last g first
+
+# i need to map whether ea team is in eastern or western conference
 team_to_conference_dict = {'Atlanta Hawks':'east', 'Chicago Bulls':'east', 'Golden State Warriors':'west',
    'Boston Celtics':'east', 'Brooklyn Nets':'east', 'Detroit Pistons':'east',
    'Houston Rockets':'west', 'Los Angeles Lakers':'west', 'Memphis Grizzlies':'west',
@@ -1128,7 +1190,6 @@ team_to_conference_dict = {'Atlanta Hawks':'east', 'Chicago Bulls':'east', 'Gold
 
 df_covers_bball_ref['conference'] = df_covers_bball_ref['team'].map(team_to_conference_dict)
 
-df_covers_bball_ref['season_start'][960:1000]
 
 def create_wins(df_all_teams_w_ivs):
     # create variables -- maybe should put elsewhere, earlier
@@ -1140,7 +1201,7 @@ def create_wins(df_all_teams_w_ivs):
     return df_all_teams_w_ivs
 
 df_covers_bball_ref = create_wins(df_covers_bball_ref)
-df_covers_bball_ref[['date', 'team', 'team_win', 'team_win_pct']][df_covers_bball_ref['team']=='Detroit Pistons'][960:1000]
+df_covers_bball_ref[['date', 'team', 'team_win', 'team_win_pct']][df_covers_bball_ref['team']=='Detroit Pistons'].head()
 
 
 #******************************
@@ -1194,7 +1255,7 @@ def create_df_w_standings_for_year(year, df_covers_bball_ref):
     #date = dates[1]
     df_w_distance_from_playoffs = pd.DataFrame()
     for date in dates[10:]:  # should this be [:] instead of [10:]??? THINK PROB NEEDS TO BE 10 OR SO, MAYBE TO MAKE SURE EA TEAM HAS PLAYED 2+ GS?
-        #date = dates[1]
+        #date = dates[10]
         standings_date_dict = create_standings_dict_for_date(date, teams, df_year)
         df_standings_date = create_df_w_distance_from_playoffs(standings_date_dict)
         df_w_distance_from_playoffs = pd.concat([df_w_distance_from_playoffs, df_standings_date], ignore_index=True)
@@ -1220,7 +1281,7 @@ def create_df_w_standings_for_year(year, df_covers_bball_ref):
 #*******************
 # PRESUMABLY I SHOULD CALCULATE FOR THIS YEAR (2016) BUT WAIT ABOUT 10 DAYS
 df_w_distance_from_playoffs_year = create_df_w_standings_for_year(2016, df_covers_bball_ref)    
-df_w_distance_from_playoffs_year.pop('Unnamed: 0')
+#df_w_distance_from_playoffs_year.pop('Unnamed: 0')
 # PRESUMABLY THE NEXT LINE IS WRONG (THE DFS AREN'T SAME ON BOTHS SIDES) AND TWO LINES DOWN IS CORRECT?
 #df_w_distance_from_playoffs_year['date'] = pd.to_datetime(df_w_distance_from_playoffs_all_years['date'])
 df_w_distance_from_playoffs_year['date'] = pd.to_datetime(df_w_distance_from_playoffs_year['date'])
@@ -1240,7 +1301,7 @@ df_w_distance_from_playoffs_all_years['date'] = pd.to_datetime(df_w_distance_fro
 
 
 # THEN CONCAT ALL OTHER YEARS W THIS SEASON - BUT WAIT ABOUT 10 DAYS
-df_w_distance_from_playoffs_all_years = pd.concat([df_w_distance_from_playoffs_all_years,df_w_distance_from_playoffs_year], ignore_index=True)
+df_w_distance_from_playoffs_all_years = pd.concat([df_w_distance_from_playoffs_all_years, df_w_distance_from_playoffs_year], ignore_index=True)
 
 
 ############
@@ -1263,13 +1324,15 @@ df_covers_bball_ref['distance_playoffs_abs'] = df_covers_bball_ref['distance_fro
 # should weight these so that takes the mean and gradually a team-specific number overtakes
 # it as the n increases. how?
 
-df_covers_bball_ref[['date', 'distance_playoffs_abs']][690:990]
+df_covers_bball_ref[['date', 'team', 'distance_playoffs_abs']][690:990]
 df_covers_bball_ref.loc[df_covers_bball_ref['distance_playoffs_abs'].isnull(), 
 'distance_playoffs_abs'] = 0
 df_covers_bball_ref.loc[df_covers_bball_ref['game'] < 20, 'distance_playoffs_abs'] = df_covers_bball_ref.loc[:,'distance_playoffs_abs']/2
 #df_covers_bball_ref[['date', 'game', 'distance_playoffs_abs', 'team']][df_covers_bball_ref['team']=='Atlanta Hawks']
 df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'distance_playoffs_abs']][500:520]
 df_covers_bball_ref[['date', 'team', 'opponent', 'distance_from_playoffs', 'distance_playoffs_abs']][960:990]
+
+df_covers_bball_ref.loc[df_covers_bball_ref['date']>date_today, 'distance_playoffs_abs'] = np.nan
 
 #df_w_distance_from_playoffs_all_years[df_w_distance_from_playoffs_all_years['date']=='2004-12-06']
 #df_w_distance_from_playoffs_all_years['date'].dtypes
@@ -1393,13 +1456,14 @@ iv_variables = ['spread', 'totals', 'lineup_count',
        'opponent_STLpct_ewma_15', 'opponent_TOVpct_ewma_15', 'opponent_TRBpct_ewma_15', 
        'opponent_TSpct_ewma_15', 'opponent_eFGpct_ewma_15', 'opponent_fg3_pct_ewma_15',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15', 'opponent_pf_ewma_15', 
-       'days_rest', 'distance_playoffs_abs', 'game', 'home_court_advantage', 'zone_distance']  #, 'zone_distance']  #, 'home_court_advantage'] # , 'venue_x_ewma_15' - 
+       'days_rest', 'distance_playoffs_abs', 'game', 'home_court_advantage', 
+       'zone_distance']  #, 'starters_same_as_last_g']  ]  #] # , 'venue_x_ewma_15' - 
        # don't think venue_ewma matters because i've already got spread_ewma in there
        # and that should be adjusting for the compeition and home court already in the past x games, 
        #, 'point_difference_ewma_15' 'zone_distance', 'starters_same_as_last_g']  , 'season_start'
 
-for var in iv_variables:
-    print(var)
+#for var in iv_variables:
+#    print(var)
 
 # select the dv to predict:
 #dv_var = 'ats_win'  
@@ -1527,7 +1591,8 @@ df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.copy(deep=True)
 #df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.reset_index(drop=True)
 #print('\n number of games without nans:', (len(df_covers_bball_ref__dropna_home)))
 
-
+len(iv_variables)
+#iv_variables = iv_variables[:-1]
 
 # ----------------------------
 # DELETE
@@ -1561,9 +1626,13 @@ df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.copy(deep=True)
 
 # test train funct for actua gambling
 #test_year = 2016
+#date_today = dates[i]
 def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables):
-    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < 2016) &
+#    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < 2015) &
+#                                                                      (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['date'] < date_today) &
                                                                       (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+
     # training on games only after 10. this seems to help. presumably only predict games in test set after game 10
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.sort_values(by=['team','date'])
@@ -1585,10 +1654,13 @@ def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_v
 
 # this ALT version trains on all data priot to today
 def create_train_and_test_dfs_ALT(df_covers_bball_ref__dropna_home, date_today, iv_variables):
-    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['date'] < date_today) &
+    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < 2015) &
                                                                       (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+#    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['date'] < date_today) &
+#                                                                      (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
     # training on games only after 10. this seems to help. presumably only predict games in test set after game 10
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
+    #df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']<10]                                                                  
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.sort_values(by=['team','date'])
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.reset_index(drop=True)
     print ('training n:', len(df_covers_bball_ref_home_train))    
@@ -1634,6 +1706,34 @@ def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_cov
     df_covers_bball_ref_home_test.loc[:,'point_diff_predicted'] = predictions_test_set
     df_covers_bball_ref_home_test = create_correct_metric(df_covers_bball_ref_home_test)
     return df_covers_bball_ref_home_test
+
+#def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables, dv_var):
+#     # use this scikit learn vs statsmodels below where do my own regularization procedure
+#    model = algorithm
+#    #model.fit(df_covers_bball_ref_home_train[iv_variables], df_covers_bball_ref_home_train[dv_var])
+#    predictions_test_set = model.predict(df_covers_bball_ref_home_test[iv_variables])
+#    df_covers_bball_ref_home_test.loc[:,'point_diff_predicted'] = predictions_test_set
+#    df_covers_bball_ref_home_test = create_correct_metric(df_covers_bball_ref_home_test)
+#    return df_covers_bball_ref_home_test
+
+
+
+# THIS IS SPITTING BACK A COUPLE NANS. WHY???
+#df_covers_bball_ref_home_test[['team', 'date', 'difference_beat_spread_last_g']]
+#df_covers_bball_ref_home_test[['team', 'opponent', 'date', 'beat_spread_last_g',
+#                               'x_beat_spread_last_g', 'difference_beat_spread_last_g',
+#                               'spread_to_bet', 'point_difference', 'beat_spread', 
+#                               'x_beat_spread']]
+#
+#df_covers_bball_ref_home_test
+# CHECK THESE TEAMS THAT MESSED UP -
+
+# I SHOULD CREATE NEW BEAT SPREAD LAST G DIFF VAR
+# SO USING spread_to_bet instead of spread standarized
+
+#beat_spread_last_g and x_beat_spread_last_g is the problem
+#df_wiz = df_covers_bball_ref[df_covers_bball_ref['team'] == 'Washington Wizards']
+#df_wiz[['date', 'team', 'beat_spread_last_g', 'beat_spread', 'spread']][-90:-70]
 
 
 
@@ -1688,8 +1788,13 @@ def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_cov
 seasons = [2010, 2011, 2012, 2013, 2014, 2015]
 
 
+# use these three algos for gambling. 
+model = svm.LinearSVR(C=.05)
 model = linear_model.Ridge(alpha=10)  # higher number regularize more
+model = AdaBoostRegressor(linear_model.Ridge(alpha=10), n_estimators=200, learning_rate=.001)  #, loss='exponential')  # 
 
+
+model = linear_model.Ridge(alpha=10)  # higher number regularize more
 model = linear_model.LinearRegression()
 #algorithm = linear_model.LinearRegression()
 
@@ -1721,8 +1826,8 @@ def analyze_multiple_seasons(df_covers_bball_ref__dropna_home, date_today, model
     iv_variabless_pre_x = iv_variables
 
     # use one of the following to to greate test and train sets (ALT trains on all up to prior g)
-    df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables)
-    #df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs_ALT(df_covers_bball_ref__dropna_home, date_today, iv_variables)
+    #df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables)
+    df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs_ALT(df_covers_bball_ref__dropna_home, date_today, iv_variables)
 
     df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df = add_interactions(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df)
     df_covers_bball_ref_home_test = create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, model, iv_variables, dv_var)
@@ -1737,15 +1842,279 @@ def analyze_multiple_seasons(df_covers_bball_ref__dropna_home, date_today, model
 df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(df_covers_bball_ref__dropna_home, date_today, model, iv_variables, dv_var, variables_for_df)
 df_test_seasons[['date','team', 'spread_to_bet', 'opponent', 'point_diff_predicted', 'how_to_bet', 'confidence']]
 
+df_test_seasons['spread_for_bet_team'] = np.nan
+df_test_seasons.loc[df_test_seasons['how_to_bet']==df_test_seasons['team'],'spread_for_bet_team'] = df_test_seasons['spread_to_bet']
+df_test_seasons.loc[df_test_seasons['how_to_bet']==df_test_seasons['opponent'],'spread_for_bet_team'] = df_test_seasons['spread_to_bet']*-1
+df_test_seasons[['date', 'how_to_bet', 'spread_for_bet_team', 'confidence']]
 
 #---------------------------
 # to look at the predictions for a particular day, run the range and select
 # that day from the list of options. then put into funct above
-dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')  
+#dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')  
+dates = pd.date_range('2016/10/25', str(year_now)+'/'+str(month_now)+'/'+str(day_now), freq='D')  
 
-df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(df_covers_bball_ref__dropna_home, dates[3], model, iv_variables, dv_var, variables_for_df)
-df_test_seasons[['date', 'team', 'spread_to_bet', 'opponent', 'point_diff_predicted', 'how_to_bet', 'confidence']]
+#i = 13
 
+model_1 = svm.LinearSVR(C=.05)
+model_2 = linear_model.Ridge(alpha=10)  # higher number regularize more
+model_3 = AdaBoostRegressor(linear_model.Ridge(alpha=10), n_estimators=200, learning_rate=.001)  #, loss='exponential')  # 
+#model_3 = linear_model.LinearRegression()
+model_3 = AdaBoostRegressor(svm.LinearSVR(C=.1), n_estimators=200, learning_rate=.001)  #, loss='exponential')  # 
+
+models = [model_1, model_2, model_3]
+
+model = svm.LinearSVR(C=.05)
+
+
+# set to use the unpickled/saved model:
+#with open('model_trained.pkl', 'rb') as picklefile:
+#    model = pickle.load(picklefile)
+#model_1 = model
+#model_2 = model
+#model_3 = model
+
+
+
+#i = 10
+def results_one_model_one_day(df_covers_bball_ref__dropna_home, i, dates, model, iv_variables, dv_var, variables_for_df):
+    df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(df_covers_bball_ref__dropna_home, dates[i], model, iv_variables, dv_var, variables_for_df)
+    df_test_seasons[['date', 'team', 'spread_to_bet', 'opponent', 'point_diff_predicted', 'how_to_bet', 'confidence']]
+    df_results = df_test_seasons[['date', 'team', 'spread_to_bet', 'opponent', 'how_to_bet', 'point_difference', 'point_diff_predicted']]
+    df_results['correct_team'] = np.nan
+    df_results.loc[df_results['point_difference'] > df_results['spread_to_bet']*-1, 'correct_team'] = df_results['team']
+    df_results.loc[df_results['point_difference'] < df_results['spread_to_bet']*-1, 'correct_team'] = df_results['opponent']    
+    df_results['correct'] = np.nan
+    df_results.loc[df_results['how_to_bet']==df_results['correct_team'], 'correct'] = 1
+    df_results.loc[df_results['how_to_bet']!=df_results['correct_team'], 'correct'] = 0
+    return df_results
+
+
+def results_three_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, model_2, model_3, iv_variables, dv_var):
+
+    # for ea model, include point_diff_predicted when filtering the dfs below
+    # then get the mean of point_diff_predicted from ea of the three models
+    # and get 'how_to_bet' from that mean. how does that predict using all gs,
+    # not just those in which the models agree.
+
+    df_results_model_1 = results_one_model_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, iv_variables, dv_var, variables_for_df)
+    df_results_model_1 = df_results_model_1[['correct_team', 'how_to_bet', 'correct', 'point_diff_predicted', 'team', 'opponent', 'spread_to_bet']]
+    df_results_model_1 = df_results_model_1.reset_index()
+    
+    df_results_model_2 = results_one_model_one_day(df_covers_bball_ref__dropna_home, i, dates, model_2, iv_variables, dv_var, variables_for_df)
+    df_results_model_2 = df_results_model_2[['how_to_bet', 'correct', 'point_diff_predicted']]
+    df_results_model_2 = df_results_model_2.reset_index()
+    
+    df_results_model_3 = results_one_model_one_day(df_covers_bball_ref__dropna_home, i, dates, model_3, iv_variables, dv_var, variables_for_df)
+    df_results_model_3 = df_results_model_3[['how_to_bet', 'correct', 'point_diff_predicted']]
+    df_results_model_3 = df_results_model_3.reset_index()
+    
+    df_results_all_models = pd.merge(df_results_model_1, df_results_model_2, on=['index'])
+    df_results_all_models = pd.merge(df_results_all_models, df_results_model_3, on=['index'])
+
+    df_results_all_models['point_diff_predicted'] = df_results_all_models[['point_diff_predicted', 'point_diff_predicted_x', 'point_diff_predicted_y']].mean(axis=1)
+    
+    # if want to bet based on mean of 3 predictions:
+    df_results_all_models = create_correct_metric(df_results_all_models)
+    df_results_all_models['correct'] = np.nan
+    df_results_all_models.loc[df_results_all_models['how_to_bet']==df_results_all_models['correct_team'], 'correct'] = 1
+    df_results_all_models.loc[df_results_all_models['how_to_bet']!=df_results_all_models['correct_team'], 'correct'] = 0
+
+    df_results_all_models['models_agree'] = 0
+    df_results_all_models.loc[(df_results_all_models['how_to_bet_x'] == df_results_all_models['how_to_bet_y']) &
+    (df_results_all_models['how_to_bet_x'] == df_results_all_models['how_to_bet']), 'models_agree'] = 1
+    
+    #df_results_all_models = df_results_all_models[df_results_all_models['models_agree']==1]
+    games_to_bet = len(df_results_all_models)
+    wins_games_to_bet = df_results_all_models['correct'].sum()
+    
+    return wins_games_to_bet, games_to_bet
+
+
+wins = []
+games = []
+for i in range(len(dates)):
+    print(i)
+    wins_games_to_bet, games_to_bet = results_three_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, model_2, model_3, iv_variables, dv_var)
+    wins.append(wins_games_to_bet)
+    games.append(games_to_bet)
+
+for i in range(len(games)):
+    print(int(wins[i]), '/', int(games[i]))
+
+round(sum(wins) / sum(games),3)
+
+# excluding first game
+round(sum(wins[3:]) / sum(games[3:]),3)
+
+
+#-------------------------------
+# for past seasons(s):
+
+def results_one_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, iv_variables, dv_var):
+    df_results_model_1 = results_one_model_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, iv_variables, dv_var, variables_for_df)
+    df_results_model_1 = df_results_model_1[['correct_team', 'how_to_bet', 'correct', 'point_diff_predicted', 'team', 'opponent', 'spread_to_bet']]
+    df_results_model_1 = df_results_model_1.reset_index()        
+    df_results_all_models = df_results_model_1    
+    df_results_all_models = create_correct_metric(df_results_all_models)
+    df_results_all_models['correct'] = np.nan
+    df_results_all_models.loc[df_results_all_models['how_to_bet']==df_results_all_models['correct_team'], 'correct'] = 1
+    df_results_all_models.loc[df_results_all_models['how_to_bet']!=df_results_all_models['correct_team'], 'correct'] = 0
+    games_to_bet = len(df_results_all_models)
+    wins_games_to_bet = df_results_all_models['correct'].sum()    
+    return wins_games_to_bet, games_to_bet
+
+model_1 = linear_model.Ridge(alpha=10)
+#model_1 = svm.LinearSVR(C=.05)
+ 
+#dates = pd.date_range('2015/10/27', '2016/4/13', freq='D')  
+dates = df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['season_start']==2015]['date'].unique()
+dates = sorted(dates)
+wins = []
+games = []
+date_of_games = []
+len(dates)
+for i in range(len(dates)):
+#for i in range(40,50):
+    print(i)
+    wins_games_to_bet, games_to_bet = results_one_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, iv_variables, dv_var)
+    #wins_games_to_bet, games_to_bet = results_three_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, model_2, model_3, iv_variables, dv_var)
+    wins.append(wins_games_to_bet)
+    games.append(games_to_bet)
+    date_of_games.append(dates[i])
+
+for i in range(len(games)):
+    print(date_of_games[i], int(wins[i]), '/', int(games[i]))
+
+round(sum(wins) / sum(games),3)
+# excluding first game
+round(sum(wins[3:]) / sum(games[3:]),3)
+round(sum(wins[30:]) / sum(games[30:]),3)
+round(sum(wins[60:]) / sum(games[60:]),3)
+round(sum(wins[80:]) / sum(games[80:]),3)
+
+df = pd.DataFrame({'date':date_of_games, 'wins':wins, 'games':games})
+df.loc[:,'win_pct_day'] = df.loc[:,'wins'] / df.loc[:,'games']
+df['wins_moving_sum_10'] = pd.rolling_sum(df['wins'], 10)
+df['games_moving_sum_10'] = pd.rolling_sum(df['games'], 10)
+df['pct_moving_avg_10'] = df['wins_moving_sum_10'] / df['games_moving_sum_10']
+
+plt.plot(df['pct_moving_avg_10'], alpha=.75)
+plt.axhline(.515, linestyle='--', alpha=.5, linewidth=1, color='grey')
+sns.despine()
+
+plt.plot(df['win_pct_day'], alpha=.75)
+plt.axhline(.515, linestyle='--', alpha=.5, linewidth=1, color='grey')
+
+
+# save results from 2013, 2014, and 2015 seasons in order to compare them
+# to the historical. use model_1 = linear_model.Ridge(alpha=10)
+df.to_csv('df_2015_results_by_day_ridge_10.csv')
+df.to_csv('df_2014_results_by_day_ridge_10.csv')
+df.to_csv('df_2013_results_by_day_ridge_10.csv')
+df.to_csv('df_2012_results_by_day_ridge_10.csv')
+
+
+## -----------------------------------------------------------------------------
+#  plot winnings graph so can see it updated daily
+#  need to estimate how much would be betting based on initial investment
+#  use my and jeff's investment of 10,0000 canadian. but do it it conservatively
+#  by altering the return to .94 and by setting the proba of winning low 
+#  (e.g., 52? 52.5 max) and also by multiplying the results by a fraction, e.g.,. 
+#  by .75. maybe can afford to use 52.5% as preicted win proba if also
+#  multiplying the amount to bet by .75. or .5.
+
+pot = 10000
+win_probability = .52
+kelly_criteria = (win_probability * .94 - (1 - win_probability)) / .94
+money_kelly = 10000
+bet_kelly = pot * kelly_criteria
+bet_kelly = bet_kelly*.8
+
+total_pot_kelly = 0
+total_winnings_kelly_list = [0]
+
+
+dates = df['date']
+len(dates)
+for i in range(0,160):
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+
+
+## -----------------------------------------------------------------------------
+#i = 14
+#i = -1
+#i = -2
+#
+#wins = []
+#games = []
+#for i in range(14):
+#    i = 10
+#
+#def results_one_day(df_covers_bball_ref__dropna_home, dates[i], model, iv_variables, dv_var, variables_for_df):
+#    df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(df_covers_bball_ref__dropna_home, dates[i], model, iv_variables, dv_var, variables_for_df)
+#    df_test_seasons[['date', 'team', 'spread_to_bet', 'opponent', 'point_diff_predicted', 'how_to_bet', 'confidence']]
+#    # problems: i = 13, i = 11
+#    # 11-7
+#
+#    df_results = df_test_seasons[['date', 'team', 'spread_to_bet', 'opponent', 'how_to_bet', 'point_difference']]
+#    df_results['correct_team'] = np.nan
+#    df_results.loc[df_results['point_difference'] > df_results['spread_to_bet']*-1, 'correct_team'] = df_results['team']
+#    df_results.loc[df_results['point_difference'] < df_results['spread_to_bet']*-1, 'correct_team'] = df_results['opponent']
+#
+#    df_results['correct'] = np.nan
+#    df_results.loc[df_results['how_to_bet']==df_results['correct_team'], 'correct'] = 1
+#    df_results.loc[df_results['how_to_bet']!=df_results['correct_team'], 'correct'] = 0
+#    df_results
+#
+#    print('win pct:', round(df_results['correct'].mean(),2))
+#    print(int(df_results['correct'].sum()), '/', int(df_results['correct'].count()))
+#
+#    wins.append(df_results['correct'].sum())
+#    games.append(df_results['correct'].count())
+#
+#print()
+#print()
+#print('wins:', int(sum(wins)), '|', 'games:', int(sum(games)))
+#print('win pct:', round(sum(wins) / sum(games),3))
+# 
+#  
+#
+#
+#results_list = [
+#[1,3],
+#[3,10],
+#[1,4],
+#[4,8],
+#[6,9],
+#[3,7],
+#[3,4],
+#[7,9],
+#[5,10],
+#[2,5],
+#[1,9],
+#[4,8],
+#[3,6],
+#[5,7]
+#]
+#
+#
+#wins = []
+#games = []
+#for l in results_list:
+#    wins.append(l[0])
+#    games.append(l[1])
+#
+#print('win pct:', round(sum(wins) / sum(games),3))
 
 
 
@@ -1756,6 +2125,7 @@ df_test_seasons[['date', 'team', 'spread_to_bet', 'opponent', 'point_diff_predic
 # playoffs variable in better way to predict these past seasons and that should help
 
 seasons = [2010, 2011, 2012, 2013, 2014, 2015]
+model = svm.LinearSVR(C=.05)
 
 def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, test_year, iv_variables):
     df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < test_year) &
