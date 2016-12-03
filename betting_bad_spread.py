@@ -49,7 +49,7 @@ from sklearn.linear_model import LogisticRegression
 #from sklearn.metrics import confusion_matrix
 #from sklearn.metrics import recall_score
 #from sklearn.cross_validation import cross_val_score
-#from sklearn.ensemble import RandomForestClassifier 
+from sklearn.ensemble import RandomForestClassifier 
 from sklearn.ensemble import RandomForestRegressor
 #from sklearn.ensemble import ExtraTreesRegressor
 from sklearn import linear_model
@@ -58,13 +58,16 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import mean_squared_error
 from sklearn import tree
 from sklearn.ensemble import AdaBoostRegressor
+from sklearn.ensemble import AdaBoostClassifier
 from sklearn import svm
+import xgboost as xgb
 #from sklearn.kernel_ridge import KernelRidge
 #from sklearn.preprocessing import StandardScaler
 #from sklearn.decomposition import PCA
 #from sklearn.ensemble import GradientBoostingRegressor
 # try tpot
 #from tpot import TPOT
+import copy
 sns.set_style('white')
 
 
@@ -182,6 +185,8 @@ df_moneyline_full.loc[df_moneyline_full['opponent_juice']>0,'opponent_juice_rev'
 
 df_moneyline_full[['team_juice', 'opponent_juice', 'team_juice_rev', 'opponent_juice_rev']].tail(10)
 
+
+# 'beat_spread_last_g'
 
 #----------------------------------------
 # get main set of box score data
@@ -335,12 +340,12 @@ df_covers_bball_ref[['team_possessions', 'opponent_possessions', 'the_team_pace'
 def assign_spread_and_totals(df_covers_bball_ref, spread_to_use, totals_to_use):
     df_covers_bball_ref.loc[:, 'totals_covers'] = df_covers_bball_ref.loc[:, 'totals']
     df_covers_bball_ref.loc[:, 'spread_covers'] = df_covers_bball_ref.loc[:, 'spread']
-    
     df_covers_bball_ref.loc[:, 'totals'] = df_covers_bball_ref.loc[:, totals_to_use]
     #df_covers_bball_ref.loc[:, 'totals'] = df_covers_bball_ref.loc[:, 'Closing Total']
-    
     df_covers_bball_ref.loc[:, 'spread'] = df_covers_bball_ref.loc[:, spread_to_use]
     #df_covers_bball_ref.loc[:, 'spread'] = df_covers_bball_ref.loc[:, 'team_close_spread']
+
+    df_covers_bball_ref['spread_to_bet'] = df_covers_bball_ref ['spread']
     return df_covers_bball_ref
 
 #df_covers_bball_ref = assign_spread_and_totals(df_covers_bball_ref, 'team_close_spread', 'Closing Total')
@@ -361,7 +366,7 @@ def create_variables_covers(df_teams_covers):
     df_teams_covers = df_teams_covers.sort(['team', 'date'])
     # how much beating the spread by of late -- to get sense of under/over performance of late
     df_teams_covers['beat_spread'] = df_teams_covers['spread'] + (df_teams_covers['score_team'] - df_teams_covers['score_oppt'])    
-    #df_teams_covers['beat_spread_last_g'] = df_teams_covers.groupby('team')['beat_spread'].transform(lambda x: x.shift(1))
+    df_teams_covers['beat_spread_last_g'] = df_teams_covers.groupby('team')['beat_spread'].transform(lambda x: x.shift(1))
     return df_teams_covers
 
 df_covers_bball_ref = create_variables_covers(df_covers_bball_ref)
@@ -382,14 +387,17 @@ variables_for_team_metrics = ['team_3PAr', 'team_ASTpct', 'team_BLKpct', 'team_D
 'point_difference']           
 
 
+# mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent', 'spread']]
 
 #------------------------------------------------------------------------------
 # OPTIONAL - add noise to the spread:
-#df_covers_bball_ref['random_number'] = np.random.normal(0, .4, len(df_covers_bball_ref))
+#df_covers_bball_ref['random_number'] = np.random.normal(0, .5, len(df_covers_bball_ref))
 #df_covers_bball_ref['random_number'].hist(alpha=.7)
 #df_covers_bball_ref['totals'] = df_covers_bball_ref.loc[:, 'totals'] + df_covers_bball_ref.loc[:, 'random_number']
 #
-#df_covers_bball_ref['random_number'] = np.random.normal(0, .4, len(df_covers_bball_ref))
+#df_covers_bball_ref['random_number'] = np.random.normal(0, .5, len(df_covers_bball_ref))
 #df_covers_bball_ref['random_number'].hist(alpha=.7)
 #df_covers_bball_ref['spread'] = df_covers_bball_ref.loc[:, 'spread'] + df_covers_bball_ref.loc[:, 'random_number']
 
@@ -403,11 +411,18 @@ def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_
     df_covers_bball_ref = df_covers_bball_ref.sort_values(by='date')
     for var in variables_for_team_metrics:
         var_ewma = var + '_ewma_15'
-        var_ewma_2 = var + '_ewma'
+        #var_ewma_2 = var + '_ewma'
         # 50 is worse than 20; 25 is worse than 20; 15 is better than 20; 10 is worse than 15; 16 is worse than 15; 14 is worse than 15
         # stick w 15. but 12 is second best. 
         # (12 looks better if want to use cutoffs and bet on fewer gs. but looks like 15 will get about same pct -- 53+ -- wih 1,000 gs)
+
         df_covers_bball_ref[var_ewma] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.ewma(x.shift(1), span=15)) 
+        # but these two approaches below are interesting too! with longer window (20) it looks like i don't
+        # get a relationship between game # or confidence level and outcome. but with shorter window i do? 
+        # or at leaset they seem to be producing diff models. take both models anf vote?
+        #df_covers_bball_ref[var_ewma] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.rolling_mean(x.shift(1), window=10, min_periods=9)) 
+        #df_covers_bball_ref[var_ewma] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.rolling_mean(x.shift(1), window=20, min_periods=9)) 
+
         #df_covers_bball_ref[var_ewma_2] = df_covers_bball_ref.groupby('team')[var].transform(lambda x: pd.ewma(x.shift(1), span=20)) 
         #df_covers_bball_ref[var_ewma] = df_covers_bball_ref[[var_ewma, var_ewma_2]].mean(axis=1)
 
@@ -415,11 +430,16 @@ def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_
 
     df_covers_bball_ref['beat_spread_std_ewma_15'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.ewmstd(x.shift(1), span=15))
     df_covers_bball_ref['current_spread_vs_spread_ewma'] = df_covers_bball_ref.loc[:, 'spread'] - df_covers_bball_ref.loc[:, 'spread_ewma_15']
-    df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x.shift(1)))                
+    df_covers_bball_ref['starters_team_lag'] = df_covers_bball_ref.groupby('team')['starters_team'].shift(1)
+    df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team_lag').cumcount()+1              
+    #df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x.shift(1)))                
     return df_covers_bball_ref
 
 df_covers_bball_ref = loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_for_team_metrics)
 
+## mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent', 'spread']]
 
 #-------------
 # start of code to detect outliers
@@ -602,6 +622,11 @@ df_covers_bball_ref['starters_same_as_two_gs'] = 0
 df_covers_bball_ref.loc[df_covers_bball_ref['starters_team_two_g']==df_covers_bball_ref['starters_team_two_g'], 'starters_same_as_two_gs'] = 1
 
 
+# mia - cha is here!
+df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+df_date[['team', 'opponent', 'spread']]
+
+
 #-------------------
 # compute ea team's home court advantage
 # but home court advantage is lessening in recent years
@@ -622,8 +647,13 @@ df_covers_bball_ref[['date', 'team', 'venue_y', 'home_court_advantage']][3960:39
 # stick with this. this gives home court advantage. and put in list of vars that don't want to compute diff for
 
 
-df_covers_bball_ref.loc[:,'spread_abs_val'] = df_covers_bball_ref.loc[:,'spread'].abs()
+# SEE IF THIS MAKES BETTER. IF NOT TAKE OUT OF AUTO GAMBLE CODE AND HERE
+# dont i want to multiply home court adv by venue? or by -1 if away and 1 if home?
+df_covers_bball_ref.loc[df_covers_bball_ref['venue_y']=='away', 'home_court_advantage'] = df_covers_bball_ref['home_court_advantage']*-1
+df_covers_bball_ref[['date', 'venue_y', 'home_court_advantage']][960:990]
 
+
+df_covers_bball_ref.loc[:,'spread_abs_val'] = df_covers_bball_ref.loc[:,'spread'].abs()
 
 
 #------------------------------------------------------------------------------
@@ -634,6 +664,11 @@ df_covers_bball_ref_save = df_covers_bball_ref.copy(deep=True)
 df_covers_bball_ref = df_covers_bball_ref_save.copy(deep=True)
 #------------------------------------------------------------------------------
 df_covers_bball_ref.rename(columns={'venue_x':'venue'}, inplace=True)
+
+
+# create var to signify how many free throws a team tends to get
+df_covers_bball_ref['team_free_throws'] = df_covers_bball_ref['team_ft_pct_ewma_15'] * df_covers_bball_ref['team_FTr_ewma_15']
+df_covers_bball_ref['opponent_free_throws'] = df_covers_bball_ref['opponent_ft_pct_ewma_15'] * df_covers_bball_ref['opponent_FTr_ewma_15']
 
 
 #--------------
@@ -664,12 +699,13 @@ variables_for_df = ['date', 'team', 'opponent', 'venue', 'lineup_count',
        'home_court_advantage', 'venue_x_ewma_15', 'point_difference_ewma_15',
        'team_close_ml', 'opponent_close_ml', 'team_close_spread', 'team_open_spread',
        'team_juice_rev', 'opponent_juice_rev', 'Opening Total', 'Closing Total', 
-       'totals_abs_diff', 'spread_abs_diff', 'totals_covers', 'starters_same_as_two_gs']
+       'totals_abs_diff', 'spread_abs_diff', 'totals_covers', 'starters_same_as_two_gs',
+       'team_free_throws', 'opponent_free_throws']
 
 # include all vars i want to precict with
 iv_variables = ['spread', 'totals', 'lineup_count', 
        'spread_ewma_15', #'current_spread_vs_spread_ewma',
-       'beat_spread_ewma_15', #'beat_spread_std_ewma_15',
+       'beat_spread_ewma_15', 'beat_spread_std_ewma_15',
        'beat_spread_last_g', 'team_3PAr_ewma_15', 'team_ASTpct_ewma_15', 
        'team_BLKpct_ewma_15', 'team_DRBpct_ewma_15',
        'team_DRtg_ewma_15', 'team_FTr_ewma_15', 'team_ORBpct_ewma_15',
@@ -683,7 +719,7 @@ iv_variables = ['spread', 'totals', 'lineup_count',
        'opponent_TSpct_ewma_15', 'opponent_eFGpct_ewma_15', 'opponent_fg3_pct_ewma_15',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15', 'opponent_pf_ewma_15', 
        'days_rest', 'distance_playoffs_abs', 'game', 'home_court_advantage',
-       'zone_distance']  #'starters_same_as_last_g']  #, 'starters_same_as_two_gs']  #], 'starters_same_as_two_gs'] # , 'venue_x_ewma_15' - 
+       'zone_distance', 'venue_x_ewma_15', 'team_free_throws', 'opponent_free_throws']  #'starters_same_as_last_g']  #, 'starters_same_as_two_gs']  #], 'starters_same_as_two_gs'] # , 'venue_x_ewma_15' - 
        # don't think venue_ewma matters because i've already got spread_ewma in there
        # and that should be adjusting for the compeition and hoe court already in the past x games, 
        #, 'point_difference_ewma_15' 'zone_distance', 'starters_same_as_last_g']  , 'season_start'
@@ -704,6 +740,11 @@ iv_and_dv_vars = iv_variables + [dv_var] + ['team', 'opponent', 'date']
 df_covers_bball_ref = df_covers_bball_ref[variables_for_df]
 
 
+# mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent', 'spread']]
+
+
 def create_switched_df(df_all_teams):
     # create df with team and opponent swithced (so can then merge the team's 
     # weighted/rolling metrics onto the original df but as the opponents)
@@ -715,6 +756,11 @@ def create_switched_df(df_all_teams):
     return df_all_teams_swtiched
 
 df_covers_bball_ref_switched = create_switched_df(df_covers_bball_ref)
+
+# mia - cha is here!
+#df_date = df_covers_bball_ref_switched[df_covers_bball_ref_switched['date']=='2008-03-22']
+#df_date[['team', 'opponent', 'spread']]
+
 
 
 def preface_oppt_stats_in_switched_df(df_all_teams_swtiched, variables_for_df):
@@ -733,6 +779,10 @@ def preface_oppt_stats_in_switched_df(df_all_teams_swtiched, variables_for_df):
 df_covers_bball_ref_switched = preface_oppt_stats_in_switched_df(df_covers_bball_ref_switched, variables_for_df)
 #df_covers_bball_ref_switched.columns
 
+# mia - cha is here!
+#df_date = df_covers_bball_ref_switched[df_covers_bball_ref_switched['date']=='2008-03-22']
+#df_date[['team', 'opponent']]
+
 
 def merge_regular_df_w_switched_df(df_all_teams, df_all_teams_swtiched):    
     df_all_teams_w_ivs = df_all_teams.merge(df_all_teams_swtiched, on=['date', 'team', 'opponent'], how='left')
@@ -740,6 +790,10 @@ def merge_regular_df_w_switched_df(df_all_teams, df_all_teams_swtiched):
     return df_all_teams_w_ivs
 
 df_covers_bball_ref = merge_regular_df_w_switched_df(df_covers_bball_ref, df_covers_bball_ref_switched)    
+
+# mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent']]
 
 
 def create_team_opponent_difference_variables(df_all_teams_w_ivs, iv_variables):
@@ -749,6 +803,10 @@ def create_team_opponent_difference_variables(df_all_teams_w_ivs, iv_variables):
     return df_all_teams_w_ivs
 
 df_covers_bball_ref = create_team_opponent_difference_variables(df_covers_bball_ref, iv_variables)
+
+# mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent']]
 
 
 def create_basic_variables(df_all_teams_w_ivs):
@@ -765,6 +823,10 @@ def create_basic_variables(df_all_teams_w_ivs):
 
 df_covers_bball_ref = create_basic_variables(df_covers_bball_ref)
 
+# mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent']]
+
 
 def create_iv_list(iv_variables, variables_without_difference_score_list):
     """Put all variables that don't want to compute a difference score on."""
@@ -776,7 +838,12 @@ def create_iv_list(iv_variables, variables_without_difference_score_list):
     iv_variables = iv_variables + spread_and_totals_list
     return iv_variables
 
-iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'zone_distance', 'home_court_advantage'])  #   zone_distance, 'season_start'
+#iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'zone_distance', 'home_court_advantage'])  #   zone_distance, 'season_start'
+iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'zone_distance'])  #   zone_distance, 'season_start'
+
+# mia - cha is here!
+#df_date = df_covers_bball_ref[df_covers_bball_ref['date']=='2008-03-22']
+#df_date[['team', 'opponent']]
 
 
 def create_home_df(df_covers_bball_ref):
@@ -786,6 +853,7 @@ def create_home_df(df_covers_bball_ref):
     return df_covers_bball_ref_home
 
 df_covers_bball_ref_home = create_home_df(df_covers_bball_ref)
+
 
 
 #--------------------
@@ -800,14 +868,41 @@ variables_for_df = variables_for_df + ['home_advantage_added', 'x_away_point_dif
 
 # ----------------------------
 # drop nans
+#print('\n number of games with nans:', len(df_covers_bball_ref_home))
+#df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.dropna()
+#df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.sort_values(by=['team','date'])
+#df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.reset_index(drop=True)
+#print('\n number of games without nans:', (len(df_covers_bball_ref__dropna_home)))
+df_covers_bball_ref_home[['date', 'team', 'difference_home_court_advantage']][df_covers_bball_ref_home['difference_home_court_advantage'].isnull()]
+
+# drop nans -- but don't actually think this is nec since not training using games less than 10
 print('\n number of games with nans:', len(df_covers_bball_ref_home))
-df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.dropna()
+df_covers_bball_ref__dropna_home = df_covers_bball_ref_home[df_covers_bball_ref_home['difference_home_court_advantage'].notnull()]
 df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.sort_values(by=['team','date'])
 df_covers_bball_ref__dropna_home = df_covers_bball_ref__dropna_home.reset_index(drop=True)
 print('\n number of games without nans:', (len(df_covers_bball_ref__dropna_home)))
+#df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.copy(deep=True)
 
-#df_covers_bball_ref__dropna_home
+df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home[dv_var].isnull()]
+df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home.index==1609]
+df_covers_bball_ref__dropna_home[iv_variables][df_covers_bball_ref__dropna_home.index==1609]
+df_covers_bball_ref__dropna_home[iv_variables]
 
+df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home.index==0]
+df_covers_bball_ref__dropna_home[iv_variables][df_covers_bball_ref__dropna_home.index==0]
+
+#df_game = df_covers_bball_ref__dropna_home[iv_variables][df_covers_bball_ref__dropna_home.index==1609]
+#df_game.iloc[:,:10]
+#df_game.iloc[:,10:20]
+#df_game.iloc[:,20:30]
+#df_game.iloc[:,30:40]
+#df_game.iloc[:,40:]
+
+
+# mia - cha is missing!!!! -- ok so there must be a nan here for some reason 
+# that omits these games. but i don't really need to drop all gs with nan
+#df_date = df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['date']=='2008-03-22']
+#df_date[['team', 'opponent', 'spread']]
 
 #test_year = 2015
 # ----------------------------
@@ -846,6 +941,19 @@ def add_interactions(df_covers_bball_ref_home_train, df_covers_bball_ref_home_te
     df_covers_bball_ref_home_test['game_x_playoff_distance'] = df_covers_bball_ref_home_test['game'] * df_covers_bball_ref_home_test['difference_distance_playoffs_abs']
     iv_variables = iv_variables + ['game_x_playoff_distance']
     variables_for_df = variables_for_df + ['game_x_playoff_distance']
+
+    # add interaction between venue_ewma and home_court advantage:
+    df_covers_bball_ref_home_train['venue_ewma_x_home_advantage'] = df_covers_bball_ref_home_train['difference_venue_x_ewma_15'] * df_covers_bball_ref_home_train['difference_home_court_advantage']
+    df_covers_bball_ref_home_test['venue_ewma_x_home_advantage'] = df_covers_bball_ref_home_test['difference_venue_x_ewma_15'] * df_covers_bball_ref_home_test['difference_home_court_advantage']
+    iv_variables = iv_variables + ['venue_ewma_x_home_advantage']
+    variables_for_df = variables_for_df + ['venue_ewma_x_home_advantage']
+    
+    # add interaction between ft and spread:
+    df_covers_bball_ref_home_train['free_throws_x_spread'] = df_covers_bball_ref_home_train['difference_team_free_throws'] * df_covers_bball_ref_home_train['spread']
+    df_covers_bball_ref_home_test['free_throws_x_spread'] = df_covers_bball_ref_home_test['difference_team_free_throws'] * df_covers_bball_ref_home_test['spread']
+    iv_variables = iv_variables + ['free_throws_x_spread']
+    variables_for_df = variables_for_df + ['free_throws_x_spread']
+      
     return df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df
 
 
@@ -864,12 +972,27 @@ def create_correct_metric(df):
     df['predicted_spread_deviation_raw'] = df['spread_to_bet'] + df['point_diff_predicted']
     return df
 
+# for classifier
+#def create_correct_metric(df):
+#    df['correct'] = np.nan
+#    df.loc[(df['point_diff_predicted'] == df['ats_win']), 'correct'] = 1
+#    df.loc[(df['point_diff_predicted'] != df['ats_win']), 'correct'] = 0
+#    df['predicted_spread_deviation'] = df_covers_bball_ref_home_test['proba_ats_win']
+#    df.loc[:, 'predicted_spread_deviation'] = np.abs(.5 - df.loc[:, 'predicted_spread_deviation'])  
+#    df['predicted_spread_deviation_raw'] = 1
+#    return df
+
 
 def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables, dv_var):
     model = algorithm
     model.fit(df_covers_bball_ref_home_train[iv_variables], df_covers_bball_ref_home_train[dv_var])
     predictions_test_set = model.predict(df_covers_bball_ref_home_test[iv_variables])
     df_covers_bball_ref_home_test.loc[:,'point_diff_predicted'] = predictions_test_set
+    # for use with logistic classifier. comment out if regression:
+    #probability_ats_win = model.predict_proba(df_covers_bball_ref_home_test[iv_variables])
+    #probability_ats_win = [proba[0] for proba in probability_ats_win]
+    #df_covers_bball_ref_home_test['proba_ats_win'] = probability_ats_win
+    # len(probability_ats_win)
     df_covers_bball_ref_home_test = create_correct_metric(df_covers_bball_ref_home_test)
     return df_covers_bball_ref_home_test
 
@@ -891,16 +1014,30 @@ def create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_cov
 
 # compute cross validated accuracy
 seasons = [2010, 2011, 2012, 2013, 2014, 2015]
+seasons = [2014, 2015]
 seasons = [2015]
 
 model = linear_model.LinearRegression()
 
-model = linear_model.Ridge(alpha=10)  # higher number regularize more
+# higher number regularize more
+model = linear_model.Ridge(alpha=10) # go with this one
+model = linear_model.Ridge(alpha=20) # 
+model = linear_model.Ridge(alpha=40)  
+model = linear_model.Ridge(alpha=50)
+model = linear_model.Ridge(alpha=75)
+model = linear_model.Ridge(alpha=100)    
+model = linear_model.Ridge(alpha=5)  #
+model = linear_model.Ridge(alpha=2)  
+model = linear_model.Ridge(alpha=1)  
+model = linear_model.Ridge(alpha=.1)  
+
 
 #model = KNeighborsRegressor(n_neighbors=20, weights='distance')
 model = RandomForestRegressor(n_estimators=1000, max_features='auto')  # , min_samples_leaf = 10, min_samples_split = 50)
+model = RandomForestRegressor(n_estimators=200, max_features='auto')  # , min_samples_leaf = 10, min_samples_split = 50)
+
 #model = ensemble.GradientBoostingRegressor(n_estimators=500, max_depth=3, learning_rate=.01, subsample=.7) # this sucked
-#model = tree.DecisionTreeRegressor(min_samples_split = 50)
+model = tree.DecisionTreeRegressor(min_samples_split = 50)
 #model = ExtraTreesRegressor(n_estimators=500)  
 
 #model = AdaBoostRegressor(tree.DecisionTreeRegressor(), n_estimators=200)  # this decision tree regressor is the default
@@ -933,9 +1070,11 @@ model = svm.SVR(C=200, gamma=.0001) # this worked the best on nov 7, 2016
 #90               0.208383  1000.000000  0.000010
 
 model = svm.LinearSVR()  #  
-model = svm.LinearSVR(C=10)  #  
+model = svm.LinearSVR(C=10)  # 
+model = svm.LinearSVR(C=.06)  
 model = svm.LinearSVR(C=.05)  #  use this. best option for C. but how diff is this from regular regression?
 model = svm.LinearSVR(C=.1)  #  
+model = svm.LinearSVR(C=.03)  
 model = svm.LinearSVR(C=.02)  
 model = svm.LinearSVR(C=.01)  
 #model = svm.LinearSVR(C=.055)  
@@ -943,6 +1082,32 @@ model = svm.LinearSVR(C=.01)
 # these wouldn't finish. had to re-boot:
 #model = KernelRidge(alpha=.01, gamma=.5, kernel='sigmoid')  # kernel='poly'. sigmoid and poly are making worse. but can't get to work with scaled ivs
 #model = KernelRidge(alpha=.01, gamma=.5)
+
+# xgboost:
+model = xgb.XGBClassifier(n_estimators=300)
+model = xgb.XGBClassifier(n_estimators=300, gamma=2, max_delta_step=1, 
+                         min_child_weight=7, reg_alpha = .1, subsample=.7)
+model = xgb.XGBRegressor(n_estimators=200, gamma=2, max_delta_step=1, 
+                         min_child_weight=7, reg_alpha = .1, subsample=.7)
+# so far gamma5 (3.5) is tbe best (but gamma7 (600) worth thinking about)
+# go w gamma=2, lots of variance, but so is 500
+# max_delta_step=1 the best
+# min_child_weight = 7
+# reg_alpha = .1
+# reg_lambda - skip. i tried stuff
+
+                     
+# try classifier
+model = LogisticRegression(C=.01)  # smaller values specify stronger regularization.
+# C=.01 is the best. only 2010 is under 51.5
+model = LogisticRegression(C=.01)  # smaller values specify stronger regularization.
+
+
+model = RandomForestClassifier(n_estimators=1000, max_features='auto')  # , min_samples_leaf = 10, min_samples_split = 50)
+model = AdaBoostClassifier(n_estimators=200)  # this decision tree regressor is the default
+#model = AdaBoostClassifier(LogisticRegression(C=.01), n_estimators=200)  # this decision tree regressor is the default
+
+
 
 #The parameter learning_rate strongly interacts with the parameter n_estimators, the number 
 #of weak learners to fit. Smaller values of learning_rate require larger numbers of weak 
@@ -954,7 +1119,7 @@ model = svm.LinearSVR(C=.01)
 
 
 def analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, algorithm, iv_variables, dv_var, variables_for_df):
-    iv_variabless_pre_x = iv_variables
+    iv_variabless_pre_x = copy.deepcopy(iv_variables)
     accuracy_list = []
     mean_sq_error_list = []
     df_test_seasons = pd.DataFrame()
@@ -964,11 +1129,12 @@ def analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, algorith
         df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, season, iv_variables)
         df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df = add_interactions(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df)
         df_covers_bball_ref_home_test = create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, algorithm, iv_variables, dv_var)
-        df_covers_bball_ref_home_test['absolute_error'] = np.abs(df_covers_bball_ref_home_test['point_diff_predicted'] - df_covers_bball_ref_home_test['point_difference'])
+        #df_covers_bball_ref_home_test['absolute_error'] = np.abs(df_covers_bball_ref_home_test['point_diff_predicted'] - df_covers_bball_ref_home_test['point_difference'])
+        df_covers_bball_ref_home_test['absolute_error'] = 1
         df_test_seasons = pd.concat([df_test_seasons, df_covers_bball_ref_home_test])
         accuracy_list.append((season, np.round(df_covers_bball_ref_home_test['correct'].mean(), 4)*100))
         mean_sq_error_list.append((season, np.round(df_covers_bball_ref_home_test['absolute_error'].mean(), 2)))
-        iv_variables = iv_variabless_pre_x
+        iv_variables = copy.deepcopy(iv_variabless_pre_x)
         print()
     return accuracy_list, mean_sq_error_list, df_test_seasons, df_covers_bball_ref_home_train
 
@@ -993,18 +1159,138 @@ accuracy_list, mean_sq_error_list, df_test_seasons, df_covers_bball_ref_home_tra
 plot_accuracy(accuracy_list, mean_sq_error_list)
 
 
-df_covers_bball_ref_home_train['season_start'].unique()
-df_covers_bball_ref_home_train.to_csv('df_train_through_2014.csv')
 
-#-------
-with open('iv_variables.pkl', 'rb') as picklefile:
-    iv_variables_2 = pickle.load(picklefile)
+take_one_iv_out_list = []
+iv_variables_preserved = copy.deepcopy(iv_variables)
+for iv in iv_variables_preserved[25:]:
+    #iv_variables = iv_variables_preserved
+    iv_variables.remove(iv)    
+    accuracy_list, mean_sq_error_list, df_test_seasons, df_covers_bball_ref_home_train = analyze_multiple_seasons(seasons, df_covers_bball_ref__dropna_home, model, iv_variables, dv_var, variables_for_df)
+    plot_accuracy(accuracy_list, mean_sq_error_list)
+    take_one_iv_out_list.append((iv, round(df_test_seasons['correct'].mean(),3)))
+    print(iv)    
+    print(round(df_test_seasons['correct'].mean(),3))
+    print()
+    iv_variables = copy.deepcopy(iv_variables_preserved)
 
-iv_variables == iv_variables_2
-len(iv_variables)
-len(iv_variables_2)
 
-#-------
+# with all ivs
+df_test_seasons['correct'].mean()  # .519 for classifier. .53 for regressor. 
+len(iv_variables)  # 49
+len(iv_variables_preserved)  # 49
+
+first_25_ivs_list = copy.deepcopy(take_one_iv_out_list)
+all_take_one_out_iv_effects = first_25_ivs_list + take_one_iv_out_list
+
+# for regressor 2015
+'difference_team_ASTpct_ewma_15', 0.532
+'difference_opponent_ASTpct_ewma_15', 0.53
+'difference_team_FTr_ewma_15', 0.538
+'difference_opponent_FTr_ewma_15', 0.53
+'difference_opponent_pf_ewma_15', 0.537
+'difference_team_pf_ewma_15', 0.526
+'totals', 0.532
+
+# for regressor 2014 and 2015
+'difference_team_FTr_ewma_15', 0.534
+'difference_opponent_FTr_ewma_15', 0.526
+'difference_team_TOVpct_ewma_15', 0.533
+'difference_opponent_TOVpct_ewma_15', 0.528
+'difference_team_ft_pct_ewma_15', 0.532
+'difference_opponent_ft_pct_ewma_15', 0.527
+'difference_team_pf_ewma_15', 0.532
+'difference_opponent_pf_ewma_15', 0.531
+
+
+
+
+
+# for the regressor:
+#[('difference_opponent_DRBpct_ewma_15', 0.53),
+# ('difference_opponent_DRtg_ewma_15', 0.53),
+# ('difference_opponent_FTr_ewma_15', 0.53),
+# ('difference_opponent_ORBpct_ewma_15', 0.53),
+# ('difference_opponent_ORtg_ewma_15', 0.53),
+# ('difference_opponent_STLpct_ewma_15', 0.53),
+# ('difference_opponent_TOVpct_ewma_15', 0.53),
+# ('difference_opponent_TRBpct_ewma_15', 0.531),
+# ('difference_opponent_TSpct_ewma_15', 0.53),
+# ('difference_opponent_eFGpct_ewma_15', 0.53),
+# ('difference_opponent_fg3_pct_ewma_15', 0.531),
+# ('difference_opponent_fg_pct_ewma_15', 0.527),
+# ('difference_opponent_ft_pct_ewma_15', 0.532),
+# ('difference_opponent_pf_ewma_15', 0.523),
+# ('difference_days_rest', 0.526),
+# ('difference_distance_playoffs_abs', 0.529),
+# ('spread', 0.513),
+# ('totals', 0.532),
+# ('game', 0.53),
+# ('zone_distance', 0.532),
+# ('home_court_advantage', 0.531),
+# ('home_advantage_added', 0.531),
+# ('home_point_diff_ewma', 0.531),
+# ('x_away_point_diff_ewma', 0.531),
+# ('difference_lineup_count', 0.53),
+# ('difference_spread_ewma_15', 0.533),
+# ('difference_beat_spread_ewma_15', 0.531),
+# ('difference_beat_spread_std_ewma_15', 0.531),
+# ('difference_beat_spread_last_g', 0.53),
+# ('difference_team_3PAr_ewma_15', 0.529),
+# ('difference_team_ASTpct_ewma_15', 0.529),
+# ('difference_team_BLKpct_ewma_15', 0.531),
+# ('difference_team_DRBpct_ewma_15', 0.531),
+# ('difference_team_DRtg_ewma_15', 0.53),
+# ('difference_team_FTr_ewma_15', 0.531),
+# ('difference_team_ORBpct_ewma_15', 0.53),
+# ('difference_team_ORtg_ewma_15', 0.53),
+# ('difference_team_STLpct_ewma_15', 0.528),
+# ('difference_team_TOVpct_ewma_15', 0.531),
+# ('difference_team_TRBpct_ewma_15', 0.53),
+# ('difference_team_TSpct_ewma_15', 0.532),
+# ('difference_team_eFGpct_ewma_15', 0.531),
+# ('difference_team_fg3_pct_ewma_15', 0.529),
+# ('difference_team_fg_pct_ewma_15', 0.529),
+# ('difference_team_ft_pct_ewma_15', 0.533),
+# ('difference_team_pf_ewma_15', 0.528),
+# ('difference_opponent_3PAr_ewma_15', 0.528),
+# ('difference_opponent_ASTpct_ewma_15', 0.52),
+# ('difference_opponent_BLKpct_ewma_15', 0.529)]
+
+
+# for regressor
+#iv_take_out_list = ['difference_team_FTr_ewma_15', 
+#'difference_team_TOVpct_ewma_15',
+#'difference_team_ft_pct_ewma_15', 
+#'difference_team_pf_ewma_15']
+
+iv_take_out_list = ['totals', 'zone_distance', 'difference_spread_ewma_15']
+
+iv_take_out_list = ['totals', 'zone_distance']
+
+iv_take_out_list = ['totals', 'zone_distance', 'difference_spread_ewma_15', 'difference_team_TSpct_ewma_15',
+'difference_opponent_TSpct_ewma_15']
+
+# for classifier
+iv_take_out_list = ['difference_lineup_count', 'difference_team_BLKpct_ewma_15', 
+                    'difference_opponent_BLKpct_ewma_15', 'difference_team_TOVpct_ewma_15', 
+                    'difference_opponent_TOVpct_ewma_15', 'difference_team_fg_pct_ewma_15', 
+                    'difference_opponent_fg_pct_ewma_15', 'difference_opponent_STLpct_ewma_15', 
+                    'difference_team_STLpct_ewma_15', 'difference_opponent_eFGpct_ewma_15', 
+                    'difference_team_eFGpct_ewma_15', 'totals', 'zone_distance', 'home_court_advantage', 
+                    'x_away_point_diff_ewma']
+
+for iv_takeout in iv_take_out_list:
+    iv_variables.remove(iv_takeout)
+
+
+##-------
+#with open('iv_variables.pkl', 'rb') as picklefile:
+#    iv_variables_2 = pickle.load(picklefile)
+#
+#iv_variables == iv_variables_2
+#len(iv_variables)
+#len(iv_variables_2)
+##-------
 
 
 # ----------------------------------------------------------------------------
@@ -1043,14 +1329,20 @@ df_test_seasons['correct_alt_3_model'] = df_test_seasons_alt_3_model['correct_al
 
 df_test_seasons[['point_diff_predicted', 'point_diff_predicted_alt_model', 'point_diff_predicted_alt_2_model', 'point_diff_predicted_alt_3_model']].corr()
 df_test_seasons[['point_diff_predicted', 'point_diff_predicted_alt_model', 'point_diff_predicted_alt_2_model']].corr()
+df_test_seasons[['point_diff_predicted', 'point_diff_predicted_alt_model']].corr()
 
 df_test_seasons[['correct', 'correct_alt_model', 'correct_alt_2_model']].tail(20)
 df_test_seasons[['correct', 'correct_alt_model', 'correct_alt_2_model', 'correct_alt_3_model']].corr()
-df_test_seasons[['correct', 'correct_alt_model', 'correct_alt_2_model']].corr()
+df_test_seasons[['correct', 'correct_alt_model']].corr()
+
+df_test_seasons[['correct', 'correct_alt_model']].tail(20)
+df_test_seasons[['correct', 'correct_alt_model']].corr()  # nice! low corr
 
 
 df_test_seasons['point_diff_predicted_two_plus_models'] = df_test_seasons[['point_diff_predicted', 'point_diff_predicted_alt_model', 'point_diff_predicted_alt_2_model', 'point_diff_predicted_alt_3_model']].mean(axis=1)
 df_test_seasons['point_diff_predicted_two_plus_models'] = df_test_seasons[['point_diff_predicted', 'point_diff_predicted_alt_model', 'point_diff_predicted_alt_2_model']].mean(axis=1)
+df_test_seasons['point_diff_predicted_two_plus_models'] = df_test_seasons[['point_diff_predicted', 'point_diff_predicted_alt_model']].mean(axis=1)
+
 df_test_seasons['absolute_error'] = np.abs(df_test_seasons['point_diff_predicted_two_plus_models'] - df_test_seasons['point_difference'])
 
 def create_correct_metric_mean_prediction(df):
@@ -1078,6 +1370,9 @@ df_test_seasons[['correct', 'correct_alt_model', 'correct_alt_2_model', 'correct
 # how often do the models agree? - recode this so have a var that says whehter
 # they're betting on the home 'team' or away 'oppt'. and then see if the all agree or not
 df_test_seasons['models_agree'] = 0
+df_test_seasons.loc[(df_test_seasons['correct']==df_test_seasons['correct_alt_model']), 'models_agree'] = 1
+
+df_test_seasons['models_agree'] = 0
 df_test_seasons.loc[(df_test_seasons['correct']==df_test_seasons['correct_alt_model']) & (df_test_seasons['correct']==df_test_seasons['correct_alt_2_model']) &
 (df_test_seasons['correct']==df_test_seasons['correct_alt_3_model']), 'models_agree'] = 1
 
@@ -1093,11 +1388,28 @@ plt.ylim(.45,.6)
 plt.xlim(0,4)
 plt.axhline(.515, color='red', linestyle='--', alpha=.6)
 
+sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons[df_test_seasons['models_agree']==1], lowess=True)
+plt.ylim(.45,.6)
+plt.xlim(0,4)
+plt.axhline(.515, color='red', linestyle='--', alpha=.6)
+
 sns.barplot(x='models_agree', y='correct_two_models', data=df_test_seasons, hue='season_start')
 plt.ylim(.32,.68)
 plt.axhline(.515, linestyle='--', color='red')
 sns.despine()
 # if i make all three models agree, it helps!
+
+sns.barplot(x='models_agree', y='correct_two_models', data=df_test_seasons, hue='season_start')
+plt.ylim(.32,.68)
+plt.axhline(.515, linestyle='--', color='red')
+sns.despine()
+
+sns.barplot(x='models_agree', y='correct_two_models', data=df_test_seasons)
+plt.ylim(.32,.68)
+plt.axhline(.515, linestyle='--', color='red')
+sns.despine()
+
+
 
 df_test_seasons[df_test_seasons['models_agree']==0]['correct_two_models'].mean()
 df_test_seasons[df_test_seasons['models_agree']==0]['correct_two_models'].count()
@@ -1105,6 +1417,11 @@ df_test_seasons[df_test_seasons['models_agree']==1]['correct_two_models'].mean()
 df_test_seasons[df_test_seasons['models_agree']==1]['correct_two_models'].count()
 
 df_test_seasons[(df_test_seasons['models_agree']==1) & (df_test_seasons['game']> -1.75)]['correct_two_models'].mean()
+
+df_2015 = df_test_seasons[df_test_seasons['season_start']==2015]
+df_2015['correct_two_models'].mean()
+df_2015[df_2015['models_agree']==1]['correct_two_models'].mean()
+
 
 df_test_seasons['game'].hist()
 
@@ -1179,6 +1496,37 @@ df_covers_bball_ref_home_train_early_years = df_covers_bball_ref_home_train[df_c
 X = df_covers_bball_ref_home_train_early_years[iv_variables].values
 y = df_covers_bball_ref_home_train_early_years['point_difference'].values
 
+# for xgb:
+cv_params = {'max_depth': [3, 5, 7], 'min_child_weight': [1, 3, 5]}
+ind_params = {'learning_rate': 0.1, 'n_estimators': 100, 'seed':0, 'subsample': 0.8, 'colsample_bytree': 0.8}
+
+optimized_GBM = GridSearchCV(xgb.XGBRegressor(**ind_params), 
+                            cv_params, cv = 5, n_jobs = -1) 
+
+optimized_GBM.fit(X, y)
+
+optimized_GBM.grid_scores_
+
+print("The best parameters are %s with a score of %0.2f"
+      % (optimized_GBM.best_params_, optimized_GBM.best_score_))
+
+# play around with subsampling along with lowering the learning rate to see if that helps.
+cv_params = {'learning_rate': [0.1, 0.01], 'subsample': [0.7, 0.8, 0.9]}
+ind_params = {'n_estimators': 100, 'seed':0, 'colsample_bytree': 0.8, 
+             'max_depth': 3, 'min_child_weight': 1}
+
+optimized_GBM = GridSearchCV(xgb.XGBClassifier(**ind_params), 
+                            cv_params, cv = 5, n_jobs = -1)
+optimized_GBM.fit(X, y)
+
+optimized_GBM.grid_scores_
+
+print("The best parameters are %s with a score of %0.2f"
+      % (optimized_GBM.best_params_, optimized_GBM.best_score_))
+
+#The best parameters are {'learning_rate': 0.01, 'subsample': 0.7} with a score of 0.04
+
+# -----
 C_range = np.logspace(-3, 3, 10)
 gamma_range = np.logspace(-5, 5, 10)
 param_grid = dict(gamma=gamma_range, C=C_range)
@@ -1190,7 +1538,6 @@ C_range = np.logspace(-3, 3, 10)
 param_grid = dict(C=C_range)
 grid = GridSearchCV(svm.LinearSVR(), param_grid=param_grid, cv=3)
 grid.fit(X, y)
-
 
 print("The best parameters are %s with a score of %0.2f"
       % (grid.best_params_, grid.best_score_))
@@ -1646,9 +1993,10 @@ for season in seasons[2:]:
     df_test_seasons['predicted_spread_deviation'][df_test_seasons['season_start']==season].hist(alpha=.1, color='green')
     plt.xlim(0,4)
 
-sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons[df_test_seasons['season_start']>2011], hue='season_start', lowess=True, line_kws={'alpha':.6})
+sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons[df_test_seasons['season_start']>2010], hue='season_start', lowess=True, line_kws={'alpha':.6})
 plt.ylim(.4, .7)
 plt.xlim(0,4)
+#plt.xlim(0,.1)
 plt.ylabel('percent correct', fontsize=15)
 plt.grid(axis='y', linestyle='--', alpha=.15)
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.75)
@@ -1661,6 +2009,7 @@ n, bins, patches = plt.hist(df_test_seasons['predicted_spread_deviation'], bin_n
 sns.lmplot(x='predicted_spread_deviation', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.5, 'color':'blue'})
 plt.ylim(.45, .6)
 plt.xlim(0,4)
+#plt.xlim(0,.1)
 plt.ylabel('percent correct', fontsize=15)
 #plt.grid(axis='y', linestyle='--', alpha=.75)
 max_n = n.max()
@@ -1672,6 +2021,7 @@ for i in range(bin_number):
     a = 1 - n[i]/max_n
     print(a)
     plt.bar(bins[:-1][i], n[i], width=bins[1]-bins[0], alpha=a, color='b', linewidth=0)
+
 
 
 # i'm getting there. can i figure out how to plot a white hist so that with alpha=1
@@ -1691,20 +2041,21 @@ sns.despine()
 sns.lmplot(x='spread_abs_diff', y='correct', data=df_test_seasons, logistic=True)
 
 
-
 # this suggests i skip betting early in season. it's harder to beat chance here
 sns.lmplot(x='game_unstandardized', y='absolute_error', data=df_test_seasons, lowess=True, scatter_kws={'alpha':.06})
 plt.ylim(7,9)
 results = smf.ols(formula = 'absolute_error ~ game', data=df_test_seasons).fit()
 print(results.summary())  # p = .49
 
-sns.lmplot(x='game_unstandardized', y='correct', data=df_test_seasons[df_test_seasons['season_start']>2011], hue='season_start', lowess=True, line_kws={'alpha':.6})
+sns.lmplot(x='game_unstandardized', y='correct', data=df_test_seasons[df_test_seasons['season_start']>2010], hue='season_start', lowess=True, line_kws={'alpha':.6})
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
-plt.ylim(.4,.65)
+plt.ylim(.45,.6)
+plt.xlim(-5,90)
 
 sns.lmplot(x='game_unstandardized', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
-plt.ylim(.4,.65)
+plt.ylim(.45,.6)
+plt.xlim(-5,90)
 # does this dip during trade period???
 
 sns.lmplot(x='game_unstandardized', y='correct', data=df_test_seasons, x_bins=8)
@@ -1733,6 +2084,15 @@ plt.axhline(.515, linestyle='--', linewidth=1, color='grey')
 sns.despine()
 
 
+# testing otehr vars against correct:
+for col in df_test_seasons.columns:
+    print(col)
+
+sns.lmplot(x='team_STLpct_ewma_15', y='correct', data=df_test_seasons, lowess=True, line_kws={'alpha':.6})
+plt.ylim(.45,.60)
+plt.axhline(.515, linewidth=1, linestyle='--')
+
+df_test_seasons['team_STLpct_ewma_15'].hist(alpha=.6)
 
 
 # no real pattern
@@ -1753,6 +2113,12 @@ sns.lmplot(x='totals', y='correct', data=df_test_seasons, lowess=True, line_kws=
 plt.axhline(.515, linestyle='--', color='grey', linewidth=1, alpha=.5)
 plt.ylim(.4,.6)
 
+
+# if just want to select those games in which the modesl agree
+#df_test_seasons = df_test_seasons[df_test_seasons['models_agree']==1]
+#df_test_seasons['correct'] = df_test_seasons['correct_two_models']
+
+
 #------------------------------------------------------------------------------
 # look at winning % with diff selection criteria
 print('betting on all games:')
@@ -1760,7 +2126,7 @@ print('betting on all games:')
 print (df_test_seasons.groupby('season_start')['correct'].count())
 
 #df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .5) & (df_test_seasons['predicted_spread_deviation'] < 3)]
-df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .01)]
+df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .1)]
 df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
@@ -1772,11 +2138,35 @@ print (df_truncated.groupby('season_start')['correct'].mean())
 print()
 print (df_truncated.groupby('season_start')['correct'].count())
 
-df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > .01) & (df_test_seasons['game_unstandardized'] > 10)]
+df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] >= .1) & (df_test_seasons['game_unstandardized'] >= 15)]
 df_truncated['season_start'].unique()
 print (df_truncated.groupby('season_start')['correct'].mean())
 print()
 print (df_truncated.groupby('season_start')['correct'].count())
+
+accuracy_list_trunc = list(df_truncated.groupby('season_start')['correct'].mean().values)
+accuracy_list_trunc = [item*100 for item in accuracy_list_trunc]
+accuracy_list_trunc = [(year, accuracy) for accuracy, year in zip(accuracy_list_trunc, 
+                       [2010,2011,2012,2013,2014,2015])]
+
+def plot_accuracy(accuracy_list, mean_sq_error_list):
+    df = pd.DataFrame(accuracy_list, columns=['season', 'accuracy'])
+    df_mse = pd.DataFrame(mean_sq_error_list, columns=['season', 'error'])
+    df_mse['accuracy'] = df['accuracy']
+    for season in range(len(seasons)):
+        plt.plot([accuracy_list[season][1], accuracy_list[season][1]], label=str(seasons[season]));  #, color='white');
+    plt.ylim(49, 58.5)
+    plt.xticks([])
+    plt.yticks(fontsize=15)
+    plt.legend(fontsize=12)
+    plt.ylabel('percent correct', fontsize=18)
+    plt.axhline(51.5, linestyle='--', color='grey', linewidth=1, alpha=.5)
+    plt.title('accuracy of model in last six years', fontsize=15)
+    sns.despine() 
+    [print(str(year)+':', accuracy) for year, accuracy in accuracy_list]
+
+plot_accuracy(accuracy_list_trunc, mean_sq_error_list)
+
 
 # no restrictions:
 df_truncated = df_test_seasons[(df_test_seasons['predicted_spread_deviation'] > 0) & (df_test_seasons['game'] > 0)]
