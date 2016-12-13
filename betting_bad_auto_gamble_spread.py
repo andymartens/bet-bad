@@ -53,32 +53,12 @@ import random
 from collections import defaultdict
 import statsmodels.api as sm
 import statsmodels.formula.api as smf 
-#from statsmodels.formula.api import *
-#from sklearn.cross_validation import train_test_split
 from sklearn.cross_validation import cross_val_score
-#from sklearn.cross_validation import cross_val_predict
-#from sklearn import linear_model
-#from sklearn.preprocessing import scale
-#from sklearn.cross_validation import KFold
-#from sklearn.learning_curve import learning_curve
 import matplotlib.cm as cm
-#from sklearn.metrics import mean_squared_error
 from sklearn import ensemble
 from sklearn.ensemble.partial_dependence import plot_partial_dependence
-#from collections import Counter
 from sklearn.linear_model import LogisticRegression
-#from sklearn.ensemble import GradientBoostingClassifier
-#from sklearn.metrics import roc_curve
-#from sklearn.metrics import auc
-#from sklearn.cross_validation import KFold
-#from sklearn.metrics import accuracy_score
-#from sklearn.metrics import precision_score
-#from sklearn.metrics import confusion_matrix
-#from sklearn.metrics import recall_score
-#from sklearn.cross_validation import cross_val_score
-#from sklearn.ensemble import RandomForestClassifier 
 from sklearn.ensemble import RandomForestRegressor
-#from sklearn.ensemble import ExtraTreesRegressor
 from sklearn import linear_model
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import PolynomialFeatures
@@ -86,34 +66,32 @@ from sklearn.metrics import mean_squared_error
 from sklearn import tree
 from sklearn.ensemble import AdaBoostRegressor
 from sklearn import svm
-#from sklearn.kernel_ridge import KernelRidge
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-#from sklearn.ensemble import GradientBoostingRegressor
-# try tpot
-#from tpot import TPOT
 import urllib.request   
 from bs4 import BeautifulSoup
 import datetime
 sns.set_style('white')
-
+#from sklearn.ensemble import GradientBoostingRegressor
+#from sklearn.ensemble import GradientBoostingClassifier
+#from sklearn.ensemble import RandomForestClassifier 
 
 
 # --------------
 # amount to bet:
 
 # enter amount in account:
-pot = 10000
-
+total_amount = 10306
+pot = total_amount/2 - 30
+#pot = 5000
 #win_probability = .525
 #win_probability = .53
-win_probability = .5275
-
+win_probability = .52
 kelly_criteria = (win_probability * .945 - (1 - win_probability)) / .945
 bet_kelly = pot * kelly_criteria
 print(round(bet_kelly))
-print(round(bet_kelly*.9))
-print(round(bet_kelly*.8))
+#print(round(bet_kelly*.9))
+#print(round(bet_kelly*.8))  
 
 
 
@@ -691,6 +669,26 @@ df_doubled.to_csv('df_'+str(year_yesterday)+'_'+str(month_yesterday)+'_'+str(day
 # ---------
 
 
+
+df_schedule = pd.read_excel('schedule_2016_2017.xlsx')
+df_schedule.head()
+df_schedule[df_schedule['date']=='2016-11-30']
+df_schedule = df_schedule[df_schedule.index!=271]
+df_schedule = df_schedule.reset_index()
+
+df_schedule_away = df_schedule.copy(deep=True)
+df_schedule_home = df_schedule.copy(deep=True)
+df_schedule_away.rename(columns={'away_team':'team'}, inplace=True)
+df_schedule_away.rename(columns={'home_team':'opponent'}, inplace=True)
+df_schedule_away['venue'] = 'away'
+df_schedule_home.rename(columns={'away_team':'opponent'}, inplace=True)
+df_schedule_home.rename(columns={'home_team':'team'}, inplace=True)
+df_schedule_home['venue'] = 'home'
+df_schedule_doubled = pd.concat([df_schedule_home, df_schedule_away], ignore_index=True)
+df_schedule_doubled = df_schedule_doubled.sort_values(by=['team', 'date'])
+df_schedule_doubled = df_schedule_doubled.reset_index(drop=True)
+df_schedule_doubled = df_schedule_doubled[['date', 'team', 'opponent', 'venue']]
+
 # if one day ahead in viet:
 #dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')
 #date = dates[-3]  #  replace to -2 once get back days
@@ -705,8 +703,12 @@ dates = pd.date_range('25/10/2016', str(month_yesterday)+'/'+str(day_yesterday)+
 df_this_season = pd.DataFrame()
 for date in dates:
     print(date)
-    df_day = pd.read_csv('df_'+str(date.year)+'_'+str(date.month)+'_'+str(date.day)+'.csv')
-    df_this_season = pd.concat([df_this_season,df_day], ignore_index=True)
+    if date.strftime('%Y-%m-%d') in df_schedule_doubled['date'].astype(str).values:
+        #print('ok', date)
+        df_day = pd.read_csv('df_'+str(date.year)+'_'+str(date.month)+'_'+str(date.day)+'.csv')
+        df_this_season = pd.concat([df_this_season,df_day], ignore_index=True)
+    else: None
+
 
 
 # open file for this season 
@@ -735,20 +737,21 @@ len(df_covers_bball_ref)  # 29088 on oct 29, but will grow
 # ----------------------------
 # to incorpo spread and totals
 # open schedule: 
-df_schedule = pd.read_excel('schedule_2016_2017.xlsx')
-df_schedule.head()
-df_schedule_away = df_schedule.copy(deep=True)
-df_schedule_home = df_schedule.copy(deep=True)
-df_schedule_away.rename(columns={'away_team':'team'}, inplace=True)
-df_schedule_away.rename(columns={'home_team':'opponent'}, inplace=True)
-df_schedule_away['venue'] = 'away'
-df_schedule_home.rename(columns={'away_team':'opponent'}, inplace=True)
-df_schedule_home.rename(columns={'home_team':'team'}, inplace=True)
-df_schedule_home['venue'] = 'home'
-df_schedule_doubled = pd.concat([df_schedule_home, df_schedule_away], ignore_index=True)
-df_schedule_doubled = df_schedule_doubled.sort_values(by=['team', 'date'])
-df_schedule_doubled = df_schedule_doubled.reset_index(drop=True)
-df_schedule_doubled = df_schedule_doubled[['date', 'team', 'opponent', 'venue']]
+#df_schedule = pd.read_excel('schedule_2016_2017.xlsx')
+#df_schedule.head()
+#df_schedule_away = df_schedule.copy(deep=True)
+#df_schedule_home = df_schedule.copy(deep=True)
+#df_schedule_away.rename(columns={'away_team':'team'}, inplace=True)
+#df_schedule_away.rename(columns={'home_team':'opponent'}, inplace=True)
+#df_schedule_away['venue'] = 'away'
+#df_schedule_home.rename(columns={'away_team':'opponent'}, inplace=True)
+#df_schedule_home.rename(columns={'home_team':'team'}, inplace=True)
+#df_schedule_home['venue'] = 'home'
+#df_schedule_doubled = pd.concat([df_schedule_home, df_schedule_away], ignore_index=True)
+#df_schedule_doubled = df_schedule_doubled.sort_values(by=['team', 'date'])
+#df_schedule_doubled = df_schedule_doubled.reset_index(drop=True)
+#df_schedule_doubled = df_schedule_doubled[['date', 'team', 'opponent', 'venue']]
+#dates_in_schedule = df_schedule_doubled['date']
 
 
 # import spread and totals that i copied from pinnacle
@@ -851,12 +854,13 @@ def produce_df_w_all_spreads_this_season(month_now, day_now, year_now):
     dates = pd.date_range('25/10/2016', str(month_now)+'/'+str(day_now)+'/'+str(year_now), freq='D')
     df_spreads_this_season = pd.DataFrame()
     for date in dates:
-        print(date)
-        df_odds = pd.read_excel(str(date.month)+'_'+str(date.day)+'_'+str(date.year)+'_'+'odds.xlsx')
-        df_spread_doubled = tranform_odds_today(df_odds, date.month, date.day, date.year)
-        df_spreads_this_season = pd.concat([df_spreads_this_season, df_spread_doubled], ignore_index=True)
+        #print(date)
+        if date.strftime('%Y-%m-%d') in df_schedule_doubled['date'].astype(str).values:
+            print('ok', date)
+            df_odds = pd.read_excel(str(date.month)+'_'+str(date.day)+'_'+str(date.year)+'_'+'odds.xlsx')
+            df_spread_doubled = tranform_odds_today(df_odds, date.month, date.day, date.year)
+            df_spreads_this_season = pd.concat([df_spreads_this_season, df_spread_doubled], ignore_index=True)
     return df_spreads_this_season
-
 
 
 # SKIP --------------------
@@ -872,7 +876,6 @@ df_spreads_this_season = produce_df_w_all_spreads_this_season(month_now, day_now
 
 # to get spread for up to yesterday
 #df_spreads_this_season = produce_df_w_all_spreads_this_season(month_yesterday, day_yesterday, year_yesterday)
-#df_spreads_this_season = produce_df_w_all_spreads_this_season(11, 6, 2016)
 
 #df_odds = pd.read_excel(str(month_now)+'_'+str(day_now)+'_'+str(year_now)+'_'+'odds.xlsx')
 #df_odds = pd.read_excel('10_26_2016_odds.xlsx')
@@ -1005,6 +1008,236 @@ df_covers_bball_ref.loc[:, 'point_difference'] = df_covers_bball_ref.loc[:, 'sco
 df_covers_bball_ref.rename(columns={'team_predicted_points':'the_team_predicted_points'}, inplace=True)
 df_covers_bball_ref.rename(columns={'oppt_predicted_points':'the_oppt_predicted_points'}, inplace=True)
 
+
+
+
+# ---
+# get players ages
+df_players = pd.read_excel('players_nba.xlsx')
+df_players['feet'] = df_players['Ht'].str.split('-').str[0]
+df_players['feet'] = df_players['feet'].astype(float)
+df_players['inches'] = df_players['Ht'].str.split('-').str[1]
+df_players['inches'] = df_players['inches'].astype(float)
+df_players.loc[:, 'height'] = (df_players.loc[:, 'feet']*12) + df_players.loc[:, 'inches']
+df_players.loc[:, 'bmi'] = (df_players.loc[:,'Wt'] * 703) / (df_players.loc[:, 'height'] * df_players.loc[:, 'height'])
+
+df_players['Player'] = df_players['Player'].str.strip('*')
+df_players['first'] = df_players['Player'].str.split(' ').str[0]
+df_players['second'] = df_players['Player'].str.split(' ').str[1]
+df_players['third'] = df_players['Player'].str.split(' ').str[2]
+df_players['fourth'] = df_players['Player'].str.split(' ').str[3]
+df_players[(df_players['third'].notnull()) & (df_players['To']>2003)]
+
+# put hyphen between middle and last. do for df_covers_bball_ref and df_players
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Nando De Colo', 'Nando De-Colo')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('John Lucas III', 'John Lucas-III')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Luc Mbah a Moute', 'Luc Mbah-a-Moute')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('James Michael McAdoo', 'James Michael-McAdoo')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Larry Nance Jr.', 'Larry Nance-Jr.')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Juan Carlos Navarro', 'Juan Carlos-Navarro')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Peter John Ramos', 'Peter John-Ramos')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Nick Van Exel', 'Nick Van-Exel')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Keith Van Horn', 'Keith Van-Horn')
+df_covers_bball_ref['starters_team'] = df_covers_bball_ref['starters_team'].str.replace('Metta World Peace', 'Metta World-Peace')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Nando De Colo', 'Nando De-Colo')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('John Lucas III', 'John Lucas-III')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Luc Mbah a Moute', 'Luc Mbah-a-Moute')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('James Michael McAdoo', 'James Michael-McAdoo')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Larry Nance Jr.', 'Larry Nance-Jr.')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Juan Carlos Navarro', 'Juan Carlos-Navarro')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Peter John Ramos', 'Peter John-Ramos')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Nick Van Exel', 'Nick Van-Exel')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Keith Van Horn', 'Keith Van-Horn')
+df_covers_bball_ref['starters_opponent'] = df_covers_bball_ref['starters_opponent'].str.replace('Metta World Peace', 'Metta World-Peace')
+
+df_players['Player'] = df_players['Player'].str.replace('Nando De Colo', 'Nando De-Colo')
+df_players['Player'] = df_players['Player'].str.replace('John Lucas III', 'John Lucas-III')
+df_players['Player'] = df_players['Player'].str.replace('Luc Mbah a Moute', 'Luc Mbah-a-Moute')
+df_players['Player'] = df_players['Player'].str.replace('James Michael McAdoo', 'James Michael-McAdoo')
+df_players['Player'] = df_players['Player'].str.replace('Larry Nance Jr.', 'Larry Nance-Jr.')
+df_players['Player'] = df_players['Player'].str.replace('Juan Carlos Navarro', 'Juan Carlos-Navarro')
+df_players['Player'] = df_players['Player'].str.replace('Peter John Ramos', 'Peter John-Ramos')
+df_players['Player'] = df_players['Player'].str.replace('Nick Van Exel', 'Nick Van-Exel')
+df_players['Player'] = df_players['Player'].str.replace('Keith Van Horn', 'Keith Van-Horn')
+df_players['Player'] = df_players['Player'].str.replace('Metta World Peace', 'Metta World-Peace')
+
+df_covers_bball_ref['starter_team_1'] = df_covers_bball_ref['starters_team'].str.split(' ').str[0] +  ' ' + df_covers_bball_ref['starters_team'].str.split(' ').str[1] 
+df_covers_bball_ref['starter_team_2'] = df_covers_bball_ref['starters_team'].str.split(' ').str[2] +  ' ' + df_covers_bball_ref['starters_team'].str.split(' ').str[3] 
+df_covers_bball_ref['starter_team_3'] = df_covers_bball_ref['starters_team'].str.split(' ').str[4] +  ' ' + df_covers_bball_ref['starters_team'].str.split(' ').str[5] 
+df_covers_bball_ref['starter_team_4'] = df_covers_bball_ref['starters_team'].str.split(' ').str[6] +  ' ' + df_covers_bball_ref['starters_team'].str.split(' ').str[7] 
+df_covers_bball_ref['starter_team_5'] = df_covers_bball_ref['starters_team'].str.split(' ').str[8] +  ' ' + df_covers_bball_ref['starters_team'].str.split(' ').str[9] 
+df_covers_bball_ref['starter_opponent_1'] = df_covers_bball_ref['starters_opponent'].str.split(' ').str[0] +  ' ' + df_covers_bball_ref['starters_opponent'].str.split(' ').str[1] 
+df_covers_bball_ref['starter_opponent_2'] = df_covers_bball_ref['starters_opponent'].str.split(' ').str[2] +  ' ' + df_covers_bball_ref['starters_opponent'].str.split(' ').str[3] 
+df_covers_bball_ref['starter_opponent_3'] = df_covers_bball_ref['starters_opponent'].str.split(' ').str[4] +  ' ' + df_covers_bball_ref['starters_opponent'].str.split(' ').str[5] 
+df_covers_bball_ref['starter_opponent_4'] = df_covers_bball_ref['starters_opponent'].str.split(' ').str[6] +  ' ' + df_covers_bball_ref['starters_opponent'].str.split(' ').str[7] 
+df_covers_bball_ref['starter_opponent_5'] = df_covers_bball_ref['starters_opponent'].str.split(' ').str[8] +  ' ' + df_covers_bball_ref['starters_opponent'].str.split(' ').str[9] 
+
+#df_covers_bball_ref['starter_team_extra'] = df_covers_bball_ref['starters_team'].str.split(' ').str[10] 
+#df_covers_bball_ref['starter_opponent_extra'] = df_covers_bball_ref['starters_opponent'].str.split(' ').str[10] 
+#df_covers_bball_ref[['starters_team', 'starter_team_extra']][df_covers_bball_ref['starter_team_extra'].notnull()]
+
+# create player to height, player to weight, player to bmi dict to map:
+player_to_height_dict = dict(zip(df_players['Player'], df_players['height']))
+player_to_weight_dict = dict(zip(df_players['Player'], df_players['Wt']))
+player_to_bmi_dict = dict(zip(df_players['Player'], df_players['bmi']))
+player_to_bday_dict = dict(zip(df_players['Player'], df_players['Birth Date']))
+
+
+df_covers_bball_ref['starter_team_1_height'] = df_covers_bball_ref['starter_team_1'].map(player_to_height_dict)
+df_covers_bball_ref['starter_team_2_height'] = df_covers_bball_ref['starter_team_2'].map(player_to_height_dict)
+df_covers_bball_ref['starter_team_3_height'] = df_covers_bball_ref['starter_team_3'].map(player_to_height_dict)
+df_covers_bball_ref['starter_team_4_height'] = df_covers_bball_ref['starter_team_4'].map(player_to_height_dict)
+df_covers_bball_ref['starter_team_5_height'] = df_covers_bball_ref['starter_team_5'].map(player_to_height_dict)
+df_covers_bball_ref['starter_opponent_1_height'] = df_covers_bball_ref['starter_opponent_1'].map(player_to_height_dict)
+df_covers_bball_ref['starter_opponent_2_height'] = df_covers_bball_ref['starter_opponent_2'].map(player_to_height_dict)
+df_covers_bball_ref['starter_opponent_3_height'] = df_covers_bball_ref['starter_opponent_3'].map(player_to_height_dict)
+df_covers_bball_ref['starter_opponent_4_height'] = df_covers_bball_ref['starter_opponent_4'].map(player_to_height_dict)
+df_covers_bball_ref['starter_opponent_5_height'] = df_covers_bball_ref['starter_opponent_5'].map(player_to_height_dict)
+df_covers_bball_ref[['starter_team_1', 'starter_team_1_height']]
+df_covers_bball_ref[['starter_opponent_1', 'starter_opponent_1_height']]
+
+df_covers_bball_ref['starter_team_1_bmi'] = df_covers_bball_ref['starter_team_1'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_team_2_bmi'] = df_covers_bball_ref['starter_team_2'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_team_3_bmi'] = df_covers_bball_ref['starter_team_3'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_team_4_bmi'] = df_covers_bball_ref['starter_team_4'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_team_5_bmi'] = df_covers_bball_ref['starter_team_5'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_opponent_1_bmi'] = df_covers_bball_ref['starter_opponent_1'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_opponent_2_bmi'] = df_covers_bball_ref['starter_opponent_2'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_opponent_3_bmi'] = df_covers_bball_ref['starter_opponent_3'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_opponent_4_bmi'] = df_covers_bball_ref['starter_opponent_4'].map(player_to_bmi_dict)
+df_covers_bball_ref['starter_opponent_5_bmi'] = df_covers_bball_ref['starter_opponent_5'].map(player_to_bmi_dict)
+df_covers_bball_ref[['starter_opponent_1', 'starter_opponent_1_bmi']]
+
+df_covers_bball_ref['starter_team_1_bday'] = df_covers_bball_ref['starter_team_1'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_team_2_bday'] = df_covers_bball_ref['starter_team_2'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_team_3_bday'] = df_covers_bball_ref['starter_team_3'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_team_4_bday'] = df_covers_bball_ref['starter_team_4'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_team_5_bday'] = df_covers_bball_ref['starter_team_5'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_opponent_1_bday'] = df_covers_bball_ref['starter_opponent_1'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_opponent_2_bday'] = df_covers_bball_ref['starter_opponent_2'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_opponent_3_bday'] = df_covers_bball_ref['starter_opponent_3'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_opponent_4_bday'] = df_covers_bball_ref['starter_opponent_4'].map(player_to_bday_dict)
+df_covers_bball_ref['starter_opponent_5_bday'] = df_covers_bball_ref['starter_opponent_5'].map(player_to_bday_dict)
+
+df_covers_bball_ref['starter_team_1_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_team_1_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_team_2_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_team_2_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_team_3_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_team_3_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_team_4_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_team_4_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_team_5_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_team_5_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_opponent_1_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_opponent_1_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_opponent_2_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_opponent_2_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_opponent_3_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_opponent_3_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_opponent_4_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_opponent_4_bday']) / np.timedelta64(1,'D')
+df_covers_bball_ref['starter_opponent_5_age'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['starter_opponent_5_bday']) / np.timedelta64(1,'D')
+
+df_covers_bball_ref['team_age'] = df_covers_bball_ref[['starter_team_1_age', 'starter_team_2_age', 'starter_team_3_age', 
+'starter_team_4_age', 'starter_team_5_age']].mean(axis=1)
+df_covers_bball_ref['team_age_std'] = df_covers_bball_ref[['starter_team_1_age', 'starter_team_2_age', 'starter_team_3_age', 
+'starter_team_4_age', 'starter_team_5_age']].std(axis=1)
+df_covers_bball_ref['opponent_age'] = df_covers_bball_ref[['starter_opponent_1_age', 'starter_opponent_2_age', 'starter_opponent_3_age', 
+'starter_opponent_4_age', 'starter_opponent_5_age']].mean(axis=1)
+df_covers_bball_ref['opponent_age_std'] = df_covers_bball_ref[['starter_opponent_1_age', 'starter_opponent_2_age', 'starter_opponent_3_age', 
+'starter_opponent_4_age', 'starter_opponent_5_age']].std(axis=1)
+df_covers_bball_ref['team_bmi'] = df_covers_bball_ref[['starter_team_1_bmi', 'starter_team_2_bmi', 'starter_team_3_bmi', 
+'starter_team_4_bmi', 'starter_team_5_bmi']].mean(axis=1)
+df_covers_bball_ref['opponent_bmi'] = df_covers_bball_ref[['starter_opponent_1_bmi', 'starter_opponent_2_bmi', 'starter_opponent_3_bmi', 
+'starter_opponent_4_bmi', 'starter_opponent_5_bmi']].mean(axis=1)
+df_covers_bball_ref['team_height'] = df_covers_bball_ref[['starter_team_1_height', 'starter_team_2_height', 'starter_team_3_height', 
+'starter_team_4_height', 'starter_team_5_height']].mean(axis=1)
+df_covers_bball_ref['opponent_height'] = df_covers_bball_ref[['starter_opponent_1_height', 'starter_opponent_2_height', 'starter_opponent_3_height', 
+'starter_opponent_4_height', 'starter_opponent_5_height']].mean(axis=1)
+df_covers_bball_ref['team_height_std'] = df_covers_bball_ref[['starter_team_1_height', 'starter_team_2_height', 'starter_team_3_height', 
+'starter_team_4_height', 'starter_team_5_height']].std(axis=1)
+df_covers_bball_ref['opponent_height_std'] = df_covers_bball_ref[['starter_opponent_1_height', 'starter_opponent_2_height', 'starter_opponent_3_height', 
+'starter_opponent_4_height', 'starter_opponent_5_height']].std(axis=1)
+
+#sns.lmplot(x='team_age', y='point_difference', data=df_covers_bball_ref, lowess=True, scatter_kws={'alpha':.01})
+#sns.lmplot(x='team_age_std', y='point_difference', data=df_covers_bball_ref, lowess=True, scatter_kws={'alpha':.01})
+#sns.lmplot(x='team_bmi', y='point_difference', data=df_covers_bball_ref, lowess=True, scatter_kws={'alpha':.01}, y_partial='spread')
+#plt.ylim(-10,5)
+#sns.lmplot(x='team_height', y='point_difference', data=df_covers_bball_ref, lowess=True, scatter_kws={'alpha':.01}, y_partial='spread')
+#plt.ylim(-10,5)
+#sns.lmplot(x='team_height_std', y='point_difference', data=df_covers_bball_ref, lowess=True, scatter_kws={'alpha':.01}, y_partial='spread')
+#plt.ylim(-10,5)
+#sns.lmplot(x='team_age_std', y='point_difference', data=df_covers_bball_ref, lowess=True, scatter_kws={'alpha':.01}, y_partial='spread')
+#plt.ylim(-10,5)
+#plt.xlim(0,2500)
+
+# height diff at each ranking/position
+#df_covers_bball_ref[['starter_team_1_height_rank', 'starter_team_2_height_rank', 'starter_team_3_height_rank', 
+#'starter_team_4_height_rank', 'starter_team_5_height_rank']] = df_covers_bball_ref[['starter_team_1_height', 
+#'starter_team_2_height', 'starter_team_3_height', 'starter_team_4_height', 'starter_team_5_height']].rank(axis=1)
+#
+#df_covers_bball_ref[['starter_opponent_1_height_rank', 'starter_opponent_2_height_rank', 
+#'starter_opponent_3_height_rank', 'starter_opponent_4_height_rank', 
+#'starter_opponent_5_height_rank']] = df_covers_bball_ref[['starter_opponent_1_height', 'starter_opponent_2_height', 
+#'starter_opponent_3_height', 'starter_opponent_4_height', 'starter_opponent_5_height']].rank(axis=1)
+#
+#df_covers_bball_ref[['starter_team_1_height_rank', 'starter_team_2_height_rank', 'starter_team_3_height_rank', 
+#'starter_team_4_height_rank', 'starter_team_5_height_rank']].head()
+#df_covers_bball_ref[['starter_opponent_1_height_rank', 'starter_opponent_2_height_rank', 
+#'starter_opponent_3_height_rank', 'starter_opponent_4_height_rank', 'starter_opponent_5_height_rank']].head()
+#
+#df_covers_bball_ref['team_starter_1_taller'] = 0
+#df_covers_bball_ref.loc[(df_covers_bball_ref['starter_team_1_height_rank']==1 & df_covers_bball_ref['starter_opponent_1_height_rank']==1) &  
+#(df_covers_bball_ref['starter_team_1_height'] > df_covers_bball_ref['starter_opponent_1_height']) ] = 1
+#df_covers_bball_ref.loc[(df_covers_bball_ref['starter_team_1_height_rank']==1 & df_covers_bball_ref['starter_opponent_1_height_rank']==1) &  
+#(df_covers_bball_ref['starter_team_1_height'] < df_covers_bball_ref['starter_opponent_1_height']) ] = -1
+
+
+# ---
+#df_covers_bball_ref[['starter_team_1_height_rank', 'starter_team_2_height_rank', 'starter_team_3_height_rank', 
+#'starter_team_4_height_rank', 'starter_team_5_height_rank', 'starter_opponent_1_height_rank', 'starter_opponent_2_height_rank', 
+#'starter_opponent_3_height_rank', 'starter_opponent_4_height_rank', 'starter_opponent_5_height_rank']] = df_covers_bball_ref[['starter_team_1_height', 
+#'starter_team_2_height', 'starter_team_3_height', 'starter_team_4_height', 'starter_team_5_height', 'starter_opponent_1_height', 
+#'starter_opponent_2_height', 'starter_opponent_3_height', 'starter_opponent_4_height', 'starter_opponent_5_height']].rank(axis=1)
+#
+#df_covers_bball_ref[['starter_team_1_height_rank', 'starter_team_2_height_rank', 'starter_team_3_height_rank', 
+#'starter_team_4_height_rank', 'starter_team_5_height_rank', 'starter_opponent_1_height_rank', 'starter_opponent_2_height_rank', 
+#'starter_opponent_3_height_rank', 'starter_opponent_4_height_rank', 'starter_opponent_5_height_rank', 
+#'starter_team_1_height', 'starter_team_2_height', 'starter_team_3_height', 'starter_team_4_height', 'starter_team_5_height', 
+#'starter_opponent_1_height', 'starter_opponent_2_height', 'starter_opponent_3_height', 'starter_opponent_4_height', 'starter_opponent_5_height']].head()
+#
+#df_covers_bball_ref['team_height_rank'] = df_covers_bball_ref[['starter_team_1_height_rank', 'starter_team_2_height_rank', 'starter_team_3_height_rank', 
+#'starter_team_4_height_rank', 'starter_team_5_height_rank']].sum(axis=1)
+#df_covers_bball_ref['opponent_height_rank'] = df_covers_bball_ref[['starter_opponent_1_height_rank', 'starter_opponent_2_height_rank', 
+#'starter_opponent_3_height_rank', 'starter_opponent_4_height_rank', 'starter_opponent_5_height_rank']].sum(axis=1)
+
+# make starter_team_1_height the shortest, etc.
+df_covers_bball_ref[['starter_team_1_height_rank', 'starter_team_2_height_rank', 'starter_team_3_height_rank', 
+'starter_team_4_height_rank', 'starter_team_5_height_rank']] = df_covers_bball_ref[['starter_team_1_height', 
+'starter_team_2_height', 'starter_team_3_height', 'starter_team_4_height', 'starter_team_5_height']].rank(axis=1)
+
+
+for i in range(1,6):
+    print(i)
+    df_covers_bball_ref['starter_height_'+str(i)+'_lowest'] = np.nan
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_1_height_rank']==i, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_1_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_2_height_rank']==i, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_2_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_3_height_rank']==i, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_3_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_4_height_rank']==i, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_4_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_5_height_rank']==i, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_5_height']  
+
+for i in range(1,6):
+    print(i)
+    #df_covers_bball_ref['starter_height_'+str(i)+'_lowest'] = np.nan
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_1_height_rank']==i+.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_1_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_2_height_rank']==i+.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_2_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_3_height_rank']==i+.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_3_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_4_height_rank']==i+.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_4_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_5_height_rank']==i+.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_5_height']  
+
+for i in range(1,6):
+    print(i)
+    #df_covers_bball_ref['starter_height_'+str(i)+'_lowest'] = np.nan
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_1_height_rank']==i-.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_1_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_2_height_rank']==i-.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_2_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_3_height_rank']==i-.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_3_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_4_height_rank']==i-.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_4_height']  
+    df_covers_bball_ref.loc[df_covers_bball_ref['starter_team_5_height_rank']==i-.5, 'starter_height_'+str(i)+'_lowest'] =  df_covers_bball_ref['starter_team_5_height']  
+
+
+
 variables_for_team_metrics = ['team_3PAr', 'team_ASTpct', 'team_BLKpct', 'team_DRBpct', 
 'team_DRtg', 'team_FTr', 'team_ORBpct', 'team_ORtg', 'team_STLpct', 'team_TOVpct', 
 'team_TRBpct', 'team_TSpct', 'team_eFGpct', 'team_fg3_pct', 'team_fg_pct', 'team_ft_pct', 
@@ -1012,7 +1245,7 @@ variables_for_team_metrics = ['team_3PAr', 'team_ASTpct', 'team_BLKpct', 'team_D
 'opponent_DRtg', 'opponent_FTr', 'opponent_ORBpct', 'opponent_ORtg', 'opponent_STLpct', 
 'opponent_TOVpct', 'opponent_TRBpct', 'opponent_TSpct', 'opponent_eFGpct', 'opponent_fg3_pct', 
 'opponent_fg_pct', 'opponent_ft_pct', 'opponent_pf', 'spread', 'beat_spread', 'venue_x',
-'point_difference']           
+'point_difference', 'the_team_pace', 'team_age', 'team_age_std', 'team_bmi', 'team_height']           
 
 
 #------------------------------------------------------------------------------
@@ -1087,6 +1320,18 @@ def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_
     df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team_lag').cumcount()+1              
     #df_covers_bball_ref['lineup_count_expanding'] = df_covers_bball_ref.groupby('starters_team_lag')['team_3PAr'].transform(lambda x: pd.expanding_count(x))             
 
+    # adding new var to look like old bet bad var:
+    df_covers_bball_ref['bet_bad_lag_2'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_mean(x.shift(2), window=12, min_periods=10))
+    df_covers_bball_ref['bet_bad_lag_3'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_mean(x.shift(3), window=12, min_periods=10))
+    df_covers_bball_ref['bet_bad_lag_4'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_mean(x.shift(4), window=12, min_periods=10))
+    df_covers_bball_ref['bet_bad_lag_5'] = df_covers_bball_ref.groupby('team')['beat_spread'].transform(lambda x: pd.rolling_mean(x.shift(5), window=12, min_periods=10))
+
+    df_covers_bball_ref['starter_team_1_height_lag'] = df_covers_bball_ref.groupby('team')['starter_height_1_lowest'].shift(1)
+    df_covers_bball_ref['starter_team_2_height_lag'] = df_covers_bball_ref.groupby('team')['starter_height_2_lowest'].shift(1)
+    df_covers_bball_ref['starter_team_3_height_lag'] = df_covers_bball_ref.groupby('team')['starter_height_3_lowest'].shift(1)
+    df_covers_bball_ref['starter_team_4_height_lag'] = df_covers_bball_ref.groupby('team')['starter_height_4_lowest'].shift(1)
+    df_covers_bball_ref['starter_team_5_height_lag'] = df_covers_bball_ref.groupby('team')['starter_height_5_lowest'].shift(1)
+
     # CREATED AS IN HISTORICAL FILE:    
     #df_covers_bball_ref['lineup_count'] = df_covers_bball_ref.groupby('starters_team')['team_3PAr'].transform(lambda x: pd.expanding_count(x.shift(1)))                
 
@@ -1097,6 +1342,7 @@ def loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_
     return df_covers_bball_ref
 
 df_covers_bball_ref = loop_through_teams_to_create_rolling_metrics(df_covers_bball_ref, variables_for_team_metrics)
+
 df_covers_bball_ref[['date', 'beat_spread_std_ewma_15', 'spread', 'lineup_count']][960:1000]
 df_covers_bball_ref[['date', 'beat_spread_std_ewma_15', 'spread', 'lineup_count']].head()
 df_covers_bball_ref[['date', 'beat_spread_std_ewma_15', 'spread', 'beat_spread_last_g', 'beat_spread']][960:1000]
@@ -1154,6 +1400,21 @@ df_covers_bball_ref['days_rest'] = (df_covers_bball_ref['date'] - df_covers_bbal
 df_covers_bball_ref.loc[df_covers_bball_ref['days_rest']>1, 'days_rest'] = 2
 #df_covers_bball_ref['days_rest'].replace(np.nan, df_covers_bball_ref['days_rest'].mean(), inplace=True)
 
+
+# games in past 5 days
+df_covers_bball_ref['date_two_prior_game'] = df_covers_bball_ref.groupby('team')['date'].transform(lambda x: x.shift(2))
+df_covers_bball_ref['date_three_prior_game'] = df_covers_bball_ref.groupby('team')['date'].transform(lambda x: x.shift(3))
+df_covers_bball_ref['date_four_prior_game'] = df_covers_bball_ref.groupby('team')['date'].transform(lambda x: x.shift(4))
+df_covers_bball_ref['days_since_four_gs_prior'] = (df_covers_bball_ref['date'] - df_covers_bball_ref['date_four_prior_game']) / np.timedelta64(1, 'D')
+
+df_covers_bball_ref['date_five_days_ago'] = df_covers_bball_ref['date'] - datetime.timedelta(days=5)
+df_covers_bball_ref['games_in_past_5_days'] = 0
+df_covers_bball_ref.loc[df_covers_bball_ref['date_prior_game']>df_covers_bball_ref['date_five_days_ago'], 'games_in_past_5_days'] = 1
+df_covers_bball_ref.loc[df_covers_bball_ref['date_two_prior_game']>df_covers_bball_ref['date_five_days_ago'], 'games_in_past_5_days'] = 2
+df_covers_bball_ref.loc[df_covers_bball_ref['date_three_prior_game']>df_covers_bball_ref['date_five_days_ago'], 'games_in_past_5_days'] = 3
+df_covers_bball_ref.loc[df_covers_bball_ref['date_four_prior_game']>df_covers_bball_ref['date_five_days_ago'], 'games_in_past_5_days'] = 4
+#df_covers_bball_ref[['date', 'date_five_days_ago', 'team', 'games_in_past_5_days']]
+
 #df_covers_bball_ref.loc[:, 'point_difference'] = df_covers_bball_ref.loc[:,'score_team'] - df_covers_bball_ref.loc[:, 'score_oppt']
 #sns.lmplot(x='days_rest', y='point_difference', data=df_covers_bball_ref, lowess=True)
 #sns.barplot(x='days_rest', y='point_difference', data=df_covers_bball_ref[df_covers_bball_ref['venue_x']==0])
@@ -1181,8 +1442,11 @@ df_covers_bball_ref['opponent_zone'] = df_covers_bball_ref['opponent'].map(team_
 #df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==0, 'zone_distance'] = 0
 # also try alt zone_distance
 df_covers_bball_ref['zone_distance'] = np.nan
-df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==0, 'zone_distance'] = np.abs(df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
-df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==1, 'zone_distance'] = -1*np.abs(df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
+#df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==0, 'zone_distance'] = np.abs(df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
+#df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==1, 'zone_distance'] = -1*np.abs(df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
+df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==0, 'zone_distance'] = (df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
+df_covers_bball_ref.loc[df_covers_bball_ref['venue_x']==1, 'zone_distance'] = -1*(df_covers_bball_ref.loc[:, 'team_zone'] - df_covers_bball_ref.loc[:, 'opponent_zone'])
+
 
 #df_covers_bball_ref.loc[:, 'zone_distance'] = df_covers_bball_ref.loc[:, 'zone_distance'].abs()
 df_covers_bball_ref[['date', 'team','team_zone','opponent', 'opponent_zone', 'zone_distance']].head(10)
@@ -1432,6 +1696,11 @@ df_covers_bball_ref[['date', 'venue_y', 'home_court_advantage']][960:990]
 df_covers_bball_ref.loc[:,'spread_abs_val'] = df_covers_bball_ref.loc[:,'spread'].abs()
 
 
+# create var to signify how many free throws a team tends to get
+df_covers_bball_ref['team_free_throws'] = df_covers_bball_ref['team_ft_pct_ewma_15'] * df_covers_bball_ref['team_FTr_ewma_15']
+df_covers_bball_ref['opponent_free_throws'] = df_covers_bball_ref['opponent_ft_pct_ewma_15'] * df_covers_bball_ref['opponent_FTr_ewma_15']
+
+
 #------------------------------------------------------------------------------
 # run this and run again when want to add a new var and re-run below code:
 df_covers_bball_ref_save = df_covers_bball_ref.copy(deep=True)
@@ -1440,6 +1709,8 @@ df_covers_bball_ref_save = df_covers_bball_ref.copy(deep=True)
 df_covers_bball_ref = df_covers_bball_ref_save.copy(deep=True)
 #------------------------------------------------------------------------------
 
+#df_covers_bball_ref[df_covers_bball_ref['date']=='2016-11-30']
+
 df_covers_bball_ref['venue'] = df_covers_bball_ref['venue_x']
 df_covers_bball_ref.pop('venue_x')
 #df_covers_bball_ref.rename(columns={'venue_x':'venue'}, inplace=True)
@@ -1447,8 +1718,35 @@ df_covers_bball_ref.pop('venue_x')
 df_covers_bball_ref[['date','venue']][960:990]
 df_covers_bball_ref['season_start'].unique()
 
-df_covers_bball_ref[['date','team', 'spread', 'game']][df_covers_bball_ref['team']=='Boston Celtics'][-85:-75]
-df_covers_bball_ref[['date','team', 'spread', 'game']][df_covers_bball_ref['team']=='Philadelphia 76ers'][-85:-75]
+
+#df_covers_bball_ref['season_start']
+#df_covers_bball_ref['2005'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2005, '2005'] = 1
+#df_covers_bball_ref['2006'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2006, '2006'] = 1
+#df_covers_bball_ref['2007'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2007, '2007'] = 1
+#df_covers_bball_ref['2008'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2008, '2008'] = 1
+#df_covers_bball_ref['2009'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2009, '2009'] = 1
+#df_covers_bball_ref['2010'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2010, '2010'] = 1
+#df_covers_bball_ref['2011'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2011, '2011'] = 1
+#df_covers_bball_ref['2012'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2012, '2012'] = 1
+#df_covers_bball_ref['2013'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2013, '2013'] = 1
+#df_covers_bball_ref['2014'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2014, '2014'] = 1
+#df_covers_bball_ref['2015'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2015, '2015'] = 1
+#df_covers_bball_ref['2016'] = 0
+#df_covers_bball_ref.loc[df_covers_bball_ref['season_start']==2016, '2016'] = 1
+
+#df_covers_bball_ref[['date','team', 'spread', 'game']][df_covers_bball_ref['team']=='Boston Celtics'][-85:-75]
+#df_covers_bball_ref[['date','team', 'spread', 'game']][df_covers_bball_ref['team']=='Philadelphia 76ers'][-85:-75]
 
 #--------------
 # add or subtract vars from two lists below. should only have to do that once, here.
@@ -1475,13 +1773,17 @@ variables_for_df = ['date', 'team', 'opponent', 'venue', 'lineup_count',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15',
        'opponent_pf_ewma_15', 'days_rest', 'zone_distance', 'distance_playoffs_abs', 
        'starters_same_as_last_g', 'home_point_diff_ewma', 'away_point_diff_ewma',
-       'home_court_advantage', 'venue_x_ewma_15', 'point_difference_ewma_15']  #,
+       'home_court_advantage', 'venue_x_ewma_15', 'point_difference_ewma_15',
+       'team_free_throws', 'opponent_free_throws', 'bet_bad_lag_3', 'bet_bad_lag_4',
+       'the_team_pace_ewma_15', 'team_age_ewma_15', 'team_age_std_ewma_15', 'team_bmi_ewma_15', 
+       'team_height_ewma_15', 'games_in_past_5_days']  #,
+       #'2005', '2006', '2007', '2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016']  #,
        #'team_close_ml', 'opponent_close_ml', 'team_close_spread', 'team_open_spread',
        #'team_juice_rev', 'opponent_juice_rev', 'Opening Total', 'Closing Total', 
        #'totals_abs_diff', 'spread_abs_diff', 'totals_covers']
 
 # include all vars i want to precict with
-iv_variables = ['spread', 'totals', 'lineup_count', 
+iv_variables = ['totals', 'lineup_count', 'spread', 
        'spread_ewma_15', #'current_spread_vs_spread_ewma',
        'beat_spread_ewma_15', 'beat_spread_std_ewma_15',
        'beat_spread_last_g', 'team_3PAr_ewma_15', 'team_ASTpct_ewma_15', 
@@ -1497,7 +1799,8 @@ iv_variables = ['spread', 'totals', 'lineup_count',
        'opponent_TSpct_ewma_15', 'opponent_eFGpct_ewma_15', 'opponent_fg3_pct_ewma_15',
        'opponent_fg_pct_ewma_15', 'opponent_ft_pct_ewma_15', 'opponent_pf_ewma_15', 
        'days_rest', 'distance_playoffs_abs', 'game', 'home_court_advantage', 
-       'zone_distance']  #, 'starters_same_as_last_g']  ]  #] # , 'venue_x_ewma_15' - 
+       'zone_distance', 'venue_x_ewma_15','team_free_throws', 'opponent_free_throws',
+       'bet_bad_lag_3', 'bet_bad_lag_4', 'team_age_ewma_15', 'team_bmi_ewma_15']  #, 'starters_same_as_last_g']  ]  #] # , 'venue_x_ewma_15' - 
        # don't think venue_ewma matters because i've already got spread_ewma in there
        # and that should be adjusting for the compeition and home court already in the past x games, 
        #, 'point_difference_ewma_15' 'zone_distance', 'starters_same_as_last_g']  , 'season_start'
@@ -1591,7 +1894,10 @@ def create_iv_list(iv_variables, variables_without_difference_score_list):
     iv_variables = iv_variables + spread_and_totals_list
     return iv_variables
 
-iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'zone_distance', 'home_court_advantage'])  # zone_distance, 'season_start'
+iv_variables = create_iv_list(iv_variables, ['spread', 'totals', 'game', 'zone_distance'])  # home_court_advantage, zone_distance, 'season_start'
+#iv_variables = create_iv_list(iv_variables, ['totals', 'game', 'zone_distance'])  # home_court_advantage, zone_distance, 'season_start'
+
+#iv_variables = iv_variables + ['2005', '2006', '2007', '2008', '2009', '2010', '2011', '2012', '2013', '2014', '2015', '2016']
 
 
 def create_home_df(df_covers_bball_ref):
@@ -1624,6 +1930,7 @@ variables_for_df = variables_for_df + ['home_advantage_added', 'x_away_point_dif
 # -----------------------------
 df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.copy(deep=True)
 # ------------------------------
+
 ## drop nans
 #print('\n number of games with nans:', len(df_covers_bball_ref_home))
 #df_covers_bball_ref__dropna_home = df_covers_bball_ref_home.dropna()
@@ -1668,13 +1975,15 @@ len(iv_variables)
 #test_year = 2016
 #date_today = dates[i]
 def create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables):
-#    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['season_start'] < 2015) &
+
+#    df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['date'] < date_today) &
 #                                                                      (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+    days_ago_15 = date_today - datetime.timedelta(days=15)
     df_covers_bball_ref_home_train = df_covers_bball_ref__dropna_home[(df_covers_bball_ref__dropna_home['date'] < date_today) &
-                                                                      (df_covers_bball_ref__dropna_home['season_start'] > 2004)]  # was > 2004. maybe go back to that. (test_year-9)
+                                                                      (df_covers_bball_ref__dropna_home['date'] > days_ago_15)]  # was > 2004. maybe go back to that. (test_year-9)
 
     # training on games only after 10. this seems to help. presumably only predict games in test set after game 10
-    df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
+    #df_covers_bball_ref_home_train = df_covers_bball_ref_home_train[df_covers_bball_ref_home_train['game']>10]                                                                  
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.sort_values(by=['team','date'])
     df_covers_bball_ref_home_train = df_covers_bball_ref_home_train.reset_index(drop=True)
     print ('training n:', len(df_covers_bball_ref_home_train))    
@@ -1725,6 +2034,49 @@ def add_interactions(df_covers_bball_ref_home_train, df_covers_bball_ref_home_te
     df_covers_bball_ref_home_test['game_x_playoff_distance'] = df_covers_bball_ref_home_test['game'] * df_covers_bball_ref_home_test['difference_distance_playoffs_abs']
     iv_variables = iv_variables + ['game_x_playoff_distance']
     variables_for_df = variables_for_df + ['game_x_playoff_distance']
+
+    # add interaction between venue_ewma and home_court advantage:
+    df_covers_bball_ref_home_train['venue_ewma_x_home_advantage'] = df_covers_bball_ref_home_train['difference_venue_x_ewma_15'] * df_covers_bball_ref_home_train['difference_home_court_advantage']
+    df_covers_bball_ref_home_test['venue_ewma_x_home_advantage'] = df_covers_bball_ref_home_test['difference_venue_x_ewma_15'] * df_covers_bball_ref_home_test['difference_home_court_advantage']
+    iv_variables = iv_variables + ['venue_ewma_x_home_advantage']
+    variables_for_df = variables_for_df + ['venue_ewma_x_home_advantage']
+
+    # add interaction between ft and spread:
+    df_covers_bball_ref_home_train['free_throws_x_spread'] = df_covers_bball_ref_home_train['difference_team_free_throws'] * df_covers_bball_ref_home_train['spread']
+    df_covers_bball_ref_home_test['free_throws_x_spread'] = df_covers_bball_ref_home_test['difference_team_free_throws'] * df_covers_bball_ref_home_test['spread']
+    iv_variables = iv_variables + ['free_throws_x_spread']
+    variables_for_df = variables_for_df + ['free_throws_x_spread']
+
+    # add interction age x rest:
+    df_covers_bball_ref_home_train['age_x_rest'] = df_covers_bball_ref_home_train['difference_team_age_ewma_15'] * df_covers_bball_ref_home_train['difference_days_rest']
+    df_covers_bball_ref_home_test['age_x_rest'] = df_covers_bball_ref_home_test['difference_team_age_ewma_15'] * df_covers_bball_ref_home_test['difference_days_rest']
+    iv_variables = iv_variables + ['age_x_rest']
+    variables_for_df = variables_for_df + ['age_x_rest']
+
+    # add interction 3s x rest:
+    df_covers_bball_ref_home_train['three_rate_x_rest'] = df_covers_bball_ref_home_train['difference_team_3PAr_ewma_15'] * df_covers_bball_ref_home_train['difference_days_rest'] 
+    df_covers_bball_ref_home_test['three_rate_x_rest'] = df_covers_bball_ref_home_test['difference_team_3PAr_ewma_15'] * df_covers_bball_ref_home_test['difference_days_rest']       
+    iv_variables = iv_variables + ['three_rate_x_rest']
+    variables_for_df = variables_for_df + ['three_rate_x_rest']
+
+    # add interction to x oppt steals:
+#    df_covers_bball_ref_home_train['to_x_oppt_stls'] = df_covers_bball_ref_home_train['difference_team_TOVpct_ewma_15'] * df_covers_bball_ref_home_train['difference_opponent_STLpct_ewma_15'] 
+#    df_covers_bball_ref_home_test['to_x_oppt_stls'] = df_covers_bball_ref_home_test['difference_team_TOVpct_ewma_15'] * df_covers_bball_ref_home_test['difference_opponent_STLpct_ewma_15']       
+#    iv_variables = iv_variables + ['to_x_oppt_stls']
+#    variables_for_df = variables_for_df + ['to_x_oppt_stls']
+
+    # add interaction age x zone_distance:
+    df_covers_bball_ref_home_train['age_x_zone'] = df_covers_bball_ref_home_train['difference_team_age_ewma_15'] * df_covers_bball_ref_home_train['zone_distance'] 
+    df_covers_bball_ref_home_test['age_x_zone'] = df_covers_bball_ref_home_test['difference_team_age_ewma_15'] * df_covers_bball_ref_home_test['zone_distance']       
+    iv_variables = iv_variables + ['age_x_zone']
+    variables_for_df = variables_for_df + ['age_x_zone']
+
+    # add interction:
+#    df_covers_bball_ref_home_train['new_x'] = df_covers_bball_ref_home_train['difference_days_rest'] * df_covers_bball_ref_home_train['game'] 
+#    df_covers_bball_ref_home_test['new_x'] = df_covers_bball_ref_home_test['difference_days_rest'] * df_covers_bball_ref_home_test['game']       
+#    iv_variables = iv_variables + ['new_x']
+#    variables_for_df = variables_for_df + ['new_x']
+
     return df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df
 
 
@@ -1873,18 +2225,15 @@ model = svm.LinearSVR(C=.01)
 # USE FOR AUTO-GAMBLING - replace date w date_today
 def analyze_multiple_seasons(df_covers_bball_ref__dropna_home, date_today, model, iv_variables, dv_var, variables_for_df):
     iv_variabless_pre_x = iv_variables
-
     # use one of the following to to greate test and train sets (ALT trains on all up to prior g)
-    df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables)
-    #df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs_ALT(df_covers_bball_ref__dropna_home, date_today, iv_variables)
-
+    #df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs(df_covers_bball_ref__dropna_home, date_today, iv_variables)
+    df_covers_bball_ref_home_train, df_covers_bball_ref_home_test = create_train_and_test_dfs_ALT(df_covers_bball_ref__dropna_home, date_today, iv_variables)
     df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df = add_interactions(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, iv_variables, variables_for_df)
     df_covers_bball_ref_home_test = create_predictions_and_ats_in_test_df(df_covers_bball_ref_home_train, df_covers_bball_ref_home_test, model, iv_variables, dv_var)
     df_covers_bball_ref_home_test['absolute_error'] = np.abs(df_covers_bball_ref_home_test['point_diff_predicted'] - df_covers_bball_ref_home_test['point_difference'])
     df_test_seasons = df_covers_bball_ref_home_test.copy(deep=True)
     iv_variables = iv_variabless_pre_x
     return df_test_seasons, df_covers_bball_ref_home_train
-
 
 
 #---------------------------
@@ -1894,6 +2243,12 @@ model_1 = linear_model.Ridge(alpha=10)
 model_2 = linear_model.Ridge(alpha=10)  
 model_3 = linear_model.Ridge(alpha=10)  
 model_4 = linear_model.Ridge(alpha=10)  
+
+#model_1 = linear_model.Ridge(alpha=75)  
+#model_2 = linear_model.Ridge(alpha=75)  
+#model_3 = linear_model.Ridge(alpha=75)  
+#model_4 = linear_model.Ridge(alpha=75)  
+
 
 df_all_models = pd.DataFrame()
 for i, model in enumerate([model_1, model_2, model_3, model_4][:]):
@@ -1929,6 +2284,13 @@ df_all_models_simple.rename(columns={'spread_for_bet_team0':'spread'}, inplace=T
 print(df_all_models_simple)
 
 #df_covers_bball_ref_home_train.to_csv('df_auto_train_11_19_16.csv')
+
+# when the spread changes in the wrong direction (making it harder for out team to 
+# beat the spread), it takes off .086 from the confidence. if confidence goes below
+# .025 then we skip it. likewise, I assume that if the spread changes for a team
+# that we're skipping because confidence is > .025, if the spread changes in direction 
+# of team that model selected, bet on them. if changes in opposite direction, bet on 
+# the other team.
 
 
 
@@ -2021,7 +2383,7 @@ def results_three_models_one_day(df_covers_bball_ref__dropna_home, i, dates, mod
 #round(sum(wins[3:-1]) / sum(games[3:-1]),3)
 
 
-
+# --------------------------------------------------
 # --------------------------------------------------
 # get yesterday's results for max/site:
 
@@ -2034,6 +2396,7 @@ model = linear_model.Ridge(alpha=10)
 i = -1
 dates[-1]
 #i = -2
+#dates[-2]
 
 df_yesterday = results_one_model_one_day(df_covers_bball_ref__dropna_home, i, dates, model, iv_variables, dv_var, variables_for_df)
 df_yesterday['spread'] = np.nan
@@ -2049,24 +2412,130 @@ df_yesterday = df_yesterday[['date', 'how_to_bet', 'spread', 'correct', 'confide
 print(df_yesterday)
 #df_yesterday.to_csv('results_'+str(year_yesterday)+'_'+str(month_yesterday)+'_'+str(day_yesterday))
 #df_yesterday.to_csv('df_test_gs_2015_12_28_correct.csv')
-df_yesterday = df_yesterday[df_yesterday['confidence']>.4]
-df_yesterday = df_yesterday.reset_index(drop=True)
+df_yesterday.loc[df_yesterday['confidence']< .025, 'correct'] = np.nan
+df_yesterday['correct'].mean()
+#df_yesterday = df_yesterday[df_yesterday['confidence']>.4]
+#df_yesterday = df_yesterday.reset_index(drop=True)
+
+old_names = ['ATL', 'CHI', 'GSW', 'BOS', 'BRK', 'DET', 'HOU', 'LAL', 'MEM',
+             'MIA', 'MIL', 'OKC', 'ORL', 'PHO', 'POR', 'SAC', 'TOR', 'IND', 
+             'LAC', 'NYK', 'CLE', 'DEN', 'PHI', 'SAS', 'NOP', 'WAS', 'CHO', 
+             'MIN', 'DAL', 'UTA'] 
+new_names = ['Atlanta Hawks', 'Chicago Bulls', 'Golden State Warriors',
+       'Boston Celtics', 'Brooklyn Nets', 'Detroit Pistons',
+       'Houston Rockets', 'Los Angeles Lakers', 'Memphis Grizzlies',
+       'Miami Heat', 'Milwaukee Bucks', 'Oklahoma City Thunder',
+       'Orlando Magic', 'Phoenix Suns', 'Portland Trail Blazers',
+       'Sacramento Kings', 'Toronto Raptors', 'Indiana Pacers',
+       'Los Angeles Clippers', 'New York Knicks', 'Cleveland Cavaliers',
+       'Denver Nuggets', 'Philadelphia 76ers', 'San Antonio Spurs',
+       'New Orleans Pelicans', 'Washington Wizards', 'Charlotte Hornets',
+       'Minnesota Timberwolves', 'Dallas Mavericks', 'Utah Jazz']  
+
+long_to_short_name_dict = {}
+for num in range(len(old_names)):
+    long_to_short_name_dict[new_names[num]] = old_names[num]
+
+df_yesterday['how_to_bet_abbrev'] = df_yesterday['how_to_bet'].map(long_to_short_name_dict)
+df_yesterday.rename(columns={'team':'home_team'}, inplace=True)
+df_yesterday.rename(columns={'opponent':'away_team'}, inplace=True)
+df_yesterday['home_team_abbrev'] = df_yesterday['home_team'].map(long_to_short_name_dict)
+df_yesterday['away_team_abbrev'] = df_yesterday['away_team'].map(long_to_short_name_dict)
 df_yesterday.to_csv('results_'+str(dates[i])[:10]+'.csv')
-print(df_yesterday[['how_to_bet','spread', 'confidence']])
+print(df_yesterday[['how_to_bet','spread', 'confidence', 'correct']])
 # get these in the df so can give to max: 'score_team', 'score_oppt', 
 
 
 
-# ---------------------------------------------------------
-# to get graph of winnings over time using saved csv files:
+# ---------
+#  plot winning in graph along with historical winnings
+#  plot winnings graph so can see it updated daily
+#  need to estimate how much would be betting based on initial investment
+#  use my and jeff's investment of 10,0000 canadian. but do it it conservatively
+#  by altering the return to .94 and by setting the proba of winning low 
+#  (e.g., 52? 52.5 max) and also by multiplying the results by a fraction, e.g.,. 
+#  by .75. maybe can afford to use 52.5% as preicted win proba if also
+#  multiplying the amount to bet by .75. or .5.
 
 dates = pd.date_range('17/11/2016', str(month_yesterday)+'/'+str(day_yesterday)+'/'+str(year_yesterday), freq='D')
+dates[-1]
 df_bets_this_season = pd.DataFrame()
-for date in dates:
+for date in dates[:]:
     print(date)
-    df_day = pd.read_csv('df_'+str(date.year)+'_'+str(date.month)+'_'+str(date.day)+'.csv')
-    df_day = pd.read_csv('results_'+str(date.year)+'-'+str(date.month)+'-'+str(date.day)+'.csv')
-    df_bets_this_season = pd.concat([df_bets_this_season, df_day], ignore_index=True)
+    if date.strftime('%Y-%m-%d') in df_schedule_doubled['date'].astype(str).values:
+        #df_day = pd.read_csv('df_'+str(date.year)+'_'+str(date.month)+'_'+str(date.day)+'.csv')
+        #df_day = pd.read_csv('results_'+str(date.year)+'-'+str(date.month)+'-'+str(date.day)+'.csv')
+        df_day = pd.read_csv('results_'+str(date)[:10]+'.csv')
+        df_bets_this_season = pd.concat([df_bets_this_season, df_day], ignore_index=True)
+
+df_bets_this_season['date'] = pd.to_datetime(df_bets_this_season['date'])
+print('percent correct this season:', str(round(df_bets_this_season['correct'].mean()*100, 1))+'%')
+
+df_results_groupby_date = df_bets_this_season.groupby('date')['correct'].sum()
+df_results_groupby_date = df_results_groupby_date.reset_index()
+df_results_groupby_date_count = df_bets_this_season.groupby('date')['correct'].count()
+df_results_groupby_date_count = df_results_groupby_date_count.reset_index()
+df_results_groupby_date_count.rename(columns={'correct':'games'}, inplace=True)
+df_results_groupby_date = pd.merge(df_results_groupby_date, df_results_groupby_date_count, on='date')
+
+print('percent correct this season:', round(100 * df_results_groupby_date['correct'].sum() / df_results_groupby_date['games'].sum(), 1))
+win_pct_season = round(100 * df_results_groupby_date['correct'].sum() / df_results_groupby_date['games'].sum(), 1)
+
+
+pot = 5000
+win_probability = .52
+kelly_criteria = (win_probability * .945 - (1 - win_probability)) / .945
+bet_kelly = pot * kelly_criteria
+bet_kelly = bet_kelly  # *.75
+total_pot_kelly = 0
+total_winnings_kelly_list = [0]
+
+for day in dates:
+    if day.strftime('%Y-%m-%d') in df_schedule_doubled['date'].astype(str).values:
+        wins = df_results_groupby_date[df_results_groupby_date['date']==day]['correct'].values[0]
+        games = df_results_groupby_date[df_results_groupby_date['date']==day]['games'].values[0]
+        losses = games - wins
+        winnings_for_day = wins*.945*bet_kelly
+        losses_for_day = losses*bet_kelly*-1
+        total_pot_kelly = total_pot_kelly + winnings_for_day + losses_for_day
+        total_winnings_kelly_list.append(total_pot_kelly)
+        pot = pot + winnings_for_day + losses_for_day
+        bet_kelly = pot * kelly_criteria
+        bet_kelly = bet_kelly  # *.75
+        print(day, bet_kelly)
+    
+
+plt.plot(total_winnings_kelly_list, alpha=.4, color='red', linewidth=4)
+plt.xlabel('\n days', fontsize=18)
+plt.ylabel('money won/lost', fontsize=18)
+plt.xlim(0, 50)
+#plt.xlim(0,500)
+plt.ylim(min(total_winnings_kelly_list)-1000,max(total_winnings_kelly_list)+1000)
+#plt.ylim(min(total_winnings_kelly_list)-5000,70000)
+plt.axhline(.5, linestyle='--', color='blue', linewidth=1.5, alpha=.5)
+plt.xticks(fontsize=15)
+plt.yticks(fontsize=15)
+plt.grid(axis='y', alpha=.5)
+plt.grid(axis='y', which='minor', alpha=.05, color='grey', linewidth=1)
+plt.minorticks_on()
+plt.title('win percentage: '+str(win_pct_season)+'%'+'\n\nThe line below shows the amount of money won/lost \nbased on a hypothetical inital investiment of $5,000', fontsize=18)
+#plt.title('total pot: $' + str(int(money)))
+sns.despine()
+
+
+
+# --------
+# ---------------------------------------------------------
+# to get graph of winnings over time starting on Dec 7
+
+dates = pd.date_range('12/7/2016', str(month_yesterday)+'/'+str(day_yesterday)+'/'+str(year_yesterday), freq='D')
+dates[-1]
+df_bets_this_season = pd.DataFrame()
+for date in dates[:]:
+    print(date)
+    if date.strftime('%Y-%m-%d') in df_schedule_doubled['date'].astype(str).values:
+        df_day = pd.read_csv('results_'+str(date)[:10]+'.csv')
+        df_bets_this_season = pd.concat([df_bets_this_season, df_day], ignore_index=True)
 
 df_bets_this_season['date'] = pd.to_datetime(df_bets_this_season['date'])
 print('percent correct this season:', str(round(df_bets_this_season['correct'].mean()*100, 1))+'%')
@@ -2083,34 +2552,28 @@ win_pct_season = round(100 * df_results_groupby_date['correct'].sum() / df_resul
 
 
 #  plot winnings graph so can see it updated daily
-#  need to estimate how much would be betting based on initial investment
-#  use my and jeff's investment of 10,0000 canadian. but do it it conservatively
-#  by altering the return to .94 and by setting the proba of winning low 
-#  (e.g., 52? 52.5 max) and also by multiplying the results by a fraction, e.g.,. 
-#  by .75. maybe can afford to use 52.5% as preicted win proba if also
-#  multiplying the amount to bet by .75. or .5.
 
-pot = 10000
+pot = 5000
 win_probability = .52
-kelly_criteria = (win_probability * .94 - (1 - win_probability)) / .94
+kelly_criteria = (win_probability * .945 - (1 - win_probability)) / .945
 bet_kelly = pot * kelly_criteria
-bet_kelly = bet_kelly*.75
+bet_kelly = bet_kelly  # *.75
 total_pot_kelly = 0
 total_winnings_kelly_list = [0]
 
 for day in dates:
-    print(day)
-    wins = df_results_groupby_date[df_results_groupby_date['date']==day]['correct'].values[0]
-    games = df_results_groupby_date[df_results_groupby_date['date']==day]['games'].values[0]
-    losses = games - wins
-    winnings_for_day = wins*.95*bet_kelly
-    losses_for_day = losses*bet_kelly*-1
-    total_pot_kelly = total_pot_kelly + winnings_for_day + losses_for_day
-    total_winnings_kelly_list.append(total_pot_kelly)
-    pot = pot + winnings_for_day + losses_for_day
-    bet_kelly = pot * kelly_criteria
-    bet_kelly = bet_kelly*.75
-    print(bet_kelly)
+    if day.strftime('%Y-%m-%d') in df_schedule_doubled['date'].astype(str).values:
+        wins = df_results_groupby_date[df_results_groupby_date['date']==day]['correct'].values[0]
+        games = df_results_groupby_date[df_results_groupby_date['date']==day]['games'].values[0]
+        losses = games - wins
+        winnings_for_day = wins*.945*bet_kelly
+        losses_for_day = losses*bet_kelly*-1
+        total_pot_kelly = total_pot_kelly + winnings_for_day + losses_for_day
+        total_winnings_kelly_list.append(total_pot_kelly)
+        pot = pot + winnings_for_day + losses_for_day
+        bet_kelly = pot * kelly_criteria
+        bet_kelly = bet_kelly  # *.75
+        print(day, bet_kelly)
     
 
 plt.plot(total_winnings_kelly_list, alpha=.4, color='red', linewidth=4)
@@ -2118,15 +2581,20 @@ plt.xlabel('\n days', fontsize=18)
 plt.ylabel('money won/lost', fontsize=18)
 plt.xlim(0, 50)
 #plt.xlim(0,500)
-plt.ylim(min(total_winnings_kelly_list)-2000,max(total_winnings_kelly_list)+2000)
+plt.ylim(min(total_winnings_kelly_list)-1000,max(total_winnings_kelly_list)+1000)
 #plt.ylim(min(total_winnings_kelly_list)-5000,70000)
-plt.axhline(.5, linestyle='--', color='black', linewidth=1, alpha=.5)
+plt.axhline(.5, linestyle='--', color='blue', linewidth=1.5, alpha=.5)
 plt.xticks(fontsize=15)
 plt.yticks(fontsize=15)
-plt.grid(axis='y', alpha=.2)
-plt.title('win percentage: '+str(win_pct_season)+'%'+'\n\nThe line below shows the amount of money won/lost \nbased on a hypothetical inital investiment of $10,000', fontsize=18)
+plt.grid(axis='y', alpha=.5)
+plt.grid(axis='y', which='minor', alpha=.05, color='grey', linewidth=1)
+plt.minorticks_on()
+plt.title('win percentage: '+str(win_pct_season)+'%'+'\n\nThe line below shows the amount of money won/lost \nbased on a hypothetical inital investiment of $5,000', fontsize=18)
 #plt.title('total pot: $' + str(int(money)))
 sns.despine()
+
+
+
 
 
 
@@ -2145,38 +2613,45 @@ def results_one_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model
 #    df_results_all_models['correct'] = np.nan
 #    df_results_all_models.loc[df_results_all_models['how_to_bet']==df_results_all_models['correct_team'], 'correct'] = 1
 #    df_results_all_models.loc[df_results_all_models['how_to_bet']!=df_results_all_models['correct_team'], 'correct'] = 0
-    # to weed out super low cofidece:    
-    #df_results_all_models = df_results_all_models[df_results_all_models['confidence']>.02]
+    # to weed out super low confidece:    
+    #df_results_all_models = df_results_all_models[df_results_all_models['confidence']>.5]
     games_to_bet = len(df_results_all_models[df_results_all_models['correct'].notnull()])  # is this working -- don't want to couunt games in which the pt diff equals spread
     wins_games_to_bet = df_results_all_models['correct'].sum()    
     return wins_games_to_bet, games_to_bet, df_results_all_models
 
 #model_1 = linear_model.LinearRegression()
-model_1 = linear_model.Ridge(alpha=10) 
+model_1 = linear_model.Ridge(alpha=10)
+model_1 = linear_model.Ridge(alpha=75) 
+model_1 = linear_model.Ridge(alpha=100) 
 model_1 = tree.DecisionTreeRegressor()
 model_1 = linear_model.LinearRegression()
 
-year = 2015
+year = 2016
 
 #dates = pd.date_range('2015/10/27', '2016/4/13', freq='D')  
 dates = df_covers_bball_ref__dropna_home[df_covers_bball_ref__dropna_home['season_start']==year]['date'].unique()
 dates = sorted(dates)
 dates = [pd.to_datetime(date) for date in dates]
+#dates = dates[20:]
+
 wins = []
 games = []
 date_of_games = []
 df_results_season = pd.DataFrame()
 len(dates)
 for i in range(len(dates[:])):
-    print(i)
-    wins_games_to_bet, games_to_bet, df_results_day = results_one_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, iv_variables, dv_var)
-    #wins_games_to_bet, games_to_bet = results_three_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, model_2, model_3, iv_variables, dv_var)
-    wins.append(wins_games_to_bet)
-    games.append(games_to_bet)
-    date_of_games.append(dates[i])
-    df_results_day['date'] = dates[i]    
-    df_results_season = pd.concat([df_results_season, df_results_day], ignore_index=True)
-    
+    if i < -1:
+        None
+    else:
+        print(i)
+        wins_games_to_bet, games_to_bet, df_results_day = results_one_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, iv_variables, dv_var)
+        #wins_games_to_bet, games_to_bet = results_three_models_one_day(df_covers_bball_ref__dropna_home, i, dates, model_1, model_2, model_3, iv_variables, dv_var)
+        wins.append(wins_games_to_bet)
+        games.append(games_to_bet)
+        date_of_games.append(dates[i])
+        df_results_day['date'] = dates[i]    
+        df_results_season = pd.concat([df_results_season, df_results_day], ignore_index=True)
+
 for i in range(len(games)):
     print(date_of_games[i], int(wins[i]), '/', int(games[i]))
 
@@ -2186,19 +2661,83 @@ df_dates = df_dates.reset_index()
 df_dates = df_dates.reset_index()
 date_to_number_dict = dict(zip(df_dates['date'], df_dates['index']))
 df_results_season['day'] = df_results_season['date'].map(date_to_number_dict)
+#df_results_season[['date', 'correct', 'day']][150:175]
 
+df_results_season['correct'].mean()
+df_results_season['correct'][df_results_season['day']>5].mean()
 df_results_season['correct'][df_results_season['day']>21].mean()
-df_results_season['correct'][(df_results_season['day']>21) & (df_results_season['confidence']>.5)].mean()
+df_results_season['correct'][df_results_season['confidence']>.1].mean()
+df_results_season['correct'][(df_results_season['day']>22) & (df_results_season['confidence']>.1)].mean()
 
-sns.lmplot(x='day', y='correct', data=df_results_season[df_results_season['confidence']>.5], lowess=True)
-plt.ylim(.45,.63)
+
+df_results_season['correct'][300:320]
+df_results_season['correct'][df_results_season['day']<120].mean()
+df_results_season['correct'][df_results_season.index==15]=0
+df_results_season['correct'][df_results_season.index==22]=0
+df_results_season['correct'][df_results_season.index==529]=0
+df_results_season['correct'][df_results_season.index==530]=0
+df_results_season['correct'][df_results_season.index==540]=0
+df_results_season['correct'][df_results_season.index==541]=0
+df_results_season['correct'][df_results_season.index==810]=0
+df_results_season['correct'][df_results_season.index==811]=0
+df_results_season['correct'][df_results_season.index==311]=0
+df_results_season['correct'][df_results_season.index==319]=0
+
+df_results_season['rolling'] = pd.rolling_mean(df_results_season['correct'], window=75, min_periods=5)
+df_results_season['rolling'].plot()
+plt.axhline(.515)
+
+df_results_season_x = df_results_season[['day', 'correct']][df_results_season['day']<45]
+df_results_season_x['correct'].mean()
+
+df_results_season_x['rolling'] = pd.rolling_mean(df_results_season_x['correct'], window=50, min_periods=5)
+df_results_season_x['rolling'].plot()
+plt.axhline(.515)
+
+
+sns.lmplot(x='day', y='correct', data=df_results_season[df_results_season['confidence']>.1], lowess=True)
+plt.ylim(.25,.63)
 plt.xlim(-5,165)
 plt.axhline(.515, linestyle='--', linewidth=1, color='grey', alpha=.75)
 
-sns.lmplot(x='confidence', y='correct', data=df_results_season[df_results_season['day']>21], lowess=True)
-plt.ylim(.4,.65)
+sns.lmplot(x='confidence', y='correct', data=df_results_season[df_results_season['day']>5], lowess=True)
+plt.ylim(.25,.65)
 plt.xlim(-.1,3)
 plt.axhline(.515, linestyle='--', linewidth=1, color='grey', alpha=.75)
+
+
+df_results_season_regular = df_results_season.copy(deep=True)
+df_results_season_alt = df_results_season.copy(deep=True)
+df_results_season_regression = df_results_season.copy(deep=True)
+
+df_results_season_regular = df_results_season_regular.reset_index()
+df_results_season_alt = df_results_season_alt.reset_index()
+df_results_season_regression = df_results_season_regression.reset_index()
+
+
+df_results_merge_regular_alt = pd.merge(df_results_season_regular, df_results_season_alt, on=['date','index'], how='outer')
+df_results_merge_regular_alt.tail()
+
+df_results_merge_regular_alt = pd.merge(df_results_merge_regular_alt, df_results_season_regression, on=['date','index'], how='outer')
+
+df_results_merge_regular_alt[df_results_merge_regular_alt['how_to_bet_x']!=df_results_merge_regular_alt['how_to_bet_y']]
+df_results_merge_regular_alt['disagree'] = 0
+df_results_merge_regular_alt.loc[(df_results_merge_regular_alt['how_to_bet_x']!=df_results_merge_regular_alt['how_to_bet_y']), 'disagree'] = 1
+
+df_results_merge_regular_alt['new_correct'] = np.nan
+df_results_merge_regular_alt.loc[(df_results_merge_regular_alt['disagree']==1) & 
+(df_results_merge_regular_alt['confidence_x']>df_results_merge_regular_alt['confidence_y']), 'new_correct'] = df_results_merge_regular_alt['correct_x']
+df_results_merge_regular_alt.loc[(df_results_merge_regular_alt['disagree']==1) & 
+(df_results_merge_regular_alt['confidence_x']<df_results_merge_regular_alt['confidence_y']), 'new_correct'] = df_results_merge_regular_alt['correct_y']
+df_results_merge_regular_alt.loc[df_results_merge_regular_alt['disagree']==0, 'new_correct'] = df_results_merge_regular_alt['correct_x']
+
+df_results_merge_regular_alt[['correct', 'correct_x', 'correct_y', 'new_correct']].mean()
+df_results_merge_regular_alt[['correct_x', 'correct_y', 'new_correct']][df_results_merge_regular_alt['day_x']>21].mean()
+df_results_merge_regular_alt[['correct_x', 'correct_y', 'new_correct']][df_results_merge_regular_alt['confidence_x']>.1].mean()
+df_results_merge_regular_alt[['correct_x', 'correct_y', 'new_correct']][(df_results_merge_regular_alt['day_x']>22) & (df_results_merge_regular_alt['confidence_x']>.1)].mean()
+
+df_results_merge_regular_alt[['correct_x', 'correct_y', 'new_correct']][df_results_merge_regular_alt['day_x']<30].mean()
+
 
 # for decision tree:
 #sns.lmplot(x='confidence', y='correct', data=df_results_season[df_results_season['day']>21], lowess=True)
@@ -2207,13 +2746,15 @@ plt.axhline(.515, linestyle='--', linewidth=1, color='grey', alpha=.75)
 #plt.axhline(.515, linestyle='--', alpha=.5, color='grey')
 #df_results_season['confidence'].hist()
 
-df_results_season.to_csv('df_results_ridge_2012_auto.csv')
-df_results_season = pd.read_csv('df_results_ridge_2013_auto.csv')
-df_results_season = pd.read_csv('df_results_ridge_2014_auto.csv')
+#df_results_season.to_csv('df_results_ridge_2012_auto.csv')
+#df_results_season = pd.read_csv('df_results_ridge_2013_auto.csv')
+#df_results_season = pd.read_csv('df_results_ridge_2014_auto.csv')
 
 
+# -----------------
+# graph winnings in prev season (so can compare with current)
 
-round(sum(wins) / sum(games),3)
+round(sum(wins[:]) / sum(games[:]),3)
 # excluding first game
 round(sum(wins[3:]) / sum(games[3:]),3)
 round(sum(wins[30:]) / sum(games[30:]),3)
@@ -2222,9 +2763,152 @@ round(sum(wins[80:]) / sum(games[80:]),3)
 
 df = pd.DataFrame({'date':date_of_games, 'wins':wins, 'games':games})
 df.loc[:,'win_pct_day'] = df.loc[:,'wins'] / df.loc[:,'games']
-df['wins_moving_sum_10'] = pd.rolling_sum(df['wins'], 10)
-df['games_moving_sum_10'] = pd.rolling_sum(df['games'], 10)
-df['pct_moving_avg_10'] = df['wins_moving_sum_10'] / df['games_moving_sum_10']
+#df['wins_moving_sum_10'] = pd.rolling_sum(df['wins'], 10)
+#df['games_moving_sum_10'] = pd.rolling_sum(df['games'], 10)
+#df['pct_moving_avg_10'] = df['wins_moving_sum_10'] / df['games_moving_sum_10']
+df_results_groupby_date = df.groupby('date')['wins'].sum()
+df_results_groupby_date = df_results_groupby_date.reset_index()
+df_results_groupby_date_count = df.groupby('date')['games'].sum()
+df_results_groupby_date_count = df_results_groupby_date_count.reset_index()
+df_results_groupby_date = pd.merge(df_results_groupby_date, df_results_groupby_date_count, on='date')
+
+print('percent correct this season:', round(100 * df_results_groupby_date['wins'].sum() / df_results_groupby_date['games'].sum(), 1))
+win_pct_season = round(100 * df_results_groupby_date['wins'].sum() / df_results_groupby_date['games'].sum(), 1)
+
+
+pot = 10000
+win_probability = .52
+kelly_criteria = (win_probability * .94 - (1 - win_probability)) / .94
+bet_kelly = pot * kelly_criteria
+bet_kelly = bet_kelly*.75
+total_pot_kelly = 0
+total_winnings_kelly_list = [0]
+
+def create_results_by_day_for_plot_x(df_results_groupby_date, kelly_criteria, bet_kelly, pot, total_pot_kelly, total_winnings_kelly_list):
+    for day in df_results_groupby_date['date']:
+        print(day)
+        wins = df_results_groupby_date[df_results_groupby_date['date']==day]['wins'].values[0]
+        games = df_results_groupby_date[df_results_groupby_date['date']==day]['games'].values[0]
+        losses = games - wins
+        winnings_for_day = wins*.95*bet_kelly
+        losses_for_day = losses*bet_kelly*-1
+        total_pot_kelly = total_pot_kelly + winnings_for_day + losses_for_day
+        total_winnings_kelly_list.append(total_pot_kelly)
+        pot = pot + winnings_for_day + losses_for_day
+        bet_kelly = pot * kelly_criteria
+        bet_kelly = bet_kelly*.75
+        print(bet_kelly)
+    return total_winnings_kelly_list
+
+def plot_results_by_day_x(total_winnings_kelly_list, alpha, color):
+    plt.plot(total_winnings_kelly_list, alpha=alpha, color=color, linewidth=4)
+    plt.xlabel('\n days', fontsize=18)
+    plt.ylabel('money won/lost', fontsize=18)
+    plt.xlim(0, 170)
+    #plt.xlim(0,50)
+    plt.ylim(-2000,4700)
+    plt.ylim(-7000,9200)
+    #plt.ylim(min(total_winnings_kelly_list)-5000,70000)
+    plt.axhline(.5, linestyle='--', color='blue', linewidth=1.5, alpha=.5)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.grid(axis='y', alpha=.5)
+    plt.grid(axis='y', which='minor', alpha=.05, color='grey', linewidth=1)
+    plt.minorticks_on()
+    #plt.title('Performance if gambled in the five prior seaons = grey \n Current performance = red', fontsize=18)
+    #plt.title('total pot: $' + str(int(money)))
+    sns.despine()
+
+
+
+
+#df_results_groupby_date.to_csv('winnings_2015_all_gs_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2014_all_gs_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2013_all_gs_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2012_all_gs_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2011_alll_gs_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2010_all_gs_to_compare.csv')
+
+# these are seasons with the ridge model, all games (no confidence restriction)
+df_results_groupby_date_2015 = pd.read_csv('winnings_2015_all_gs_to_compare.csv')
+df_results_groupby_date_2014 = pd.read_csv('winnings_2014_all_gs_to_compare.csv')
+df_results_groupby_date_2013 = pd.read_csv('winnings_2013_all_gs_to_compare.csv')
+df_results_groupby_date_2012 = pd.read_csv('winnings_2012_all_gs_to_compare.csv')
+df_results_groupby_date_2011 = pd.read_csv('winnings_2011_alll_gs_to_compare.csv')
+df_results_groupby_date_2010 = pd.read_csv('winnings_2010_all_gs_to_compare.csv')
+
+
+#df_results_groupby_date.to_csv('winnings_2015_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2014_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2013_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2012_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2011_to_compare.csv')
+#df_results_groupby_date.to_csv('winnings_2010_to_compare.csv')
+
+# there are seasons with the ridge model and only games with confidence > .5
+df_results_groupby_date_2015 = pd.read_csv('winnings_2015_to_compare.csv')
+df_results_groupby_date_2014 = pd.read_csv('winnings_2014_to_compare.csv')
+df_results_groupby_date_2013 = pd.read_csv('winnings_2013_to_compare.csv')
+df_results_groupby_date_2012 = pd.read_csv('winnings_2012_to_compare.csv')
+df_results_groupby_date_2011 = pd.read_csv('winnings_2011_to_compare.csv')
+df_results_groupby_date_2010 = pd.read_csv('winnings_2010_to_compare.csv')
+
+
+# tweak df from graph of winnigns so far. compare prior with current.
+df_results_groupby_date.rename(columns={'correct':'wins'}, inplace=True)
+
+for results_df, color in zip([df_results_groupby_date_2015, df_results_groupby_date_2014, 
+                   df_results_groupby_date_2013, df_results_groupby_date_2012,
+                   df_results_groupby_date_2011, df_results_groupby_date], ['grey',
+                   'grey','grey','grey','grey','red']): #, df_results_groupby_date_2010]:
+#for results_df, color in zip([df_results_groupby_date_2015, df_results_groupby_date_2014, 
+#                   df_results_groupby_date_2013, df_results_groupby_date_2012,
+#                   df_results_groupby_date, df_results_groupby_date_2010], ['grey',
+#                   'grey','grey','grey','grey','red']): #, df_results_groupby_date_2010]:
+    if color == 'grey':
+        results_df = results_df.iloc[20:,:]
+        alpha = .2
+    else:
+        results_df = results_df
+        alpha = .5
+    pot = 10000
+    win_probability = .52
+    kelly_criteria = (win_probability * .94 - (1 - win_probability)) / .94
+    bet_kelly = pot * kelly_criteria
+    bet_kelly = bet_kelly*.75
+    total_pot_kelly = 0
+    total_winnings_kelly_list = [0]
+    total_winnings_kelly_list = create_results_by_day_for_plot_x(results_df, kelly_criteria, bet_kelly, pot, total_pot_kelly, total_winnings_kelly_list)
+    plot_results_by_day_x(total_winnings_kelly_list, alpha, color)
+
+# to bring it to 50%
+df_results_groupby_date_2010['wins'].sum() / df_results_groupby_date_2010['games'].sum()
+df_results_groupby_date_2010['wins'][df_results_groupby_date_2010.index==145] = 0
+df_results_groupby_date_2010['wins'][df_results_groupby_date_2010.index==29] = 0
+df_results_groupby_date_2010['wins'][df_results_groupby_date_2010.index==136] = 0
+
+
+# plot all gs after 20th day, not just those with confidence > .5
+for results_df in [df_results_groupby_date_2015, df_results_groupby_date_2014, 
+                   df_results_groupby_date_2013, df_results_groupby_date_2010]: #, df_results_groupby_date_2010]: #, df_results_groupby_date_2010]:
+    results_df = results_df.iloc[:,:]
+    alpha = .2
+    color='grey'
+    pot = 10000
+    win_probability = .525
+    kelly_criteria = (win_probability * .94 - (1 - win_probability)) / .94
+    bet_kelly = pot * kelly_criteria
+    bet_kelly = bet_kelly*.75
+    total_pot_kelly = 0
+    total_winnings_kelly_list = [0]
+    total_winnings_kelly_list = create_results_by_day_for_plot_x(results_df, kelly_criteria, bet_kelly, pot, total_pot_kelly, total_winnings_kelly_list)
+    plot_results_by_day_x(total_winnings_kelly_list, alpha, color)
+
+
+
+
+
+
 
 df[df['date']=='2015-12-14']
 # LEFT OFF -- HASN'T FIXED. SHOULD BE 3/9. FIND OUT WHY. SOMEHOW NOT
